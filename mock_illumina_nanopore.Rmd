@@ -1,0 +1,418 @@
+---
+title: "Mock Illumina and Water samples"
+output: html_document
+date: '2023-04-18'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Make plot Genus --------------------------------------------------------------------
+# First with Nanopore 
+
+#Agglomerate taxa at Genus level, then sort based on sum of taxa
+gp.mock <- prune_taxa(names(sort(taxa_sums(perc_brack4),decreasing = T)), perc_brack4)
+gp.mix.mock <- tax_glom(gp.mock, taxrank ="Genus",NArm=F)
+top.class.list.mock <- names(sort(taxa_sums(gp.mix.mock),TRUE)[1:15])
+top.class.mock <- prune_taxa(top.class.list.mock,gp.mix.mock)
+proportional_top.mock <- merge_taxa(top.class.mock,"Genus")
+gp_prop.mock <- transform_sample_counts(proportional_top.mock,function(x) 100 * x/sum(x))
+df.mix.top20.mock <- psmelt(gp_prop.mock)
+df.mix.top20.mock$Id <- NULL
+df.mix.top20.mock$Dataset <- rep("Nanopore",length(df.mix.top20.mock$Sample))
+
+# Illumina 
+#Agglomerate taxa at Genus level, then sort based on sum of taxa
+gp.mock.il <- prune_taxa(names(sort(taxa_sums(ps.mock.test),decreasing = T)), ps.mock.test)
+gp.mix.mock.il <- tax_glom(gp.mock.il, taxrank ="Genus",NArm=F)
+top.class.list.mock.il <- names(sort(taxa_sums(gp.mix.mock.il),TRUE)[1:15])
+top.class.mock.il <- prune_taxa(top.class.list.mock.il,gp.mix.mock.il)
+proportional_top.mock.il <- merge_taxa(top.class.mock.il,"Genus")
+gp_prop.mock.il <- transform_sample_counts(proportional_top.mock.il,function(x) 100 * x/sum(x))
+df.mix.top20.mock.il <- psmelt(gp_prop.mock.il)
+
+# Remove redundant columns
+df.mix.top20.mock.il[4:13] <- NULL
+df.mix.top20.mock.il$Dataset <- rep("Illumina",length(df.mix.top20.mock.il$Sample))
+df.mix.top20.mock.il <- df.mix.top20.mock.il[!is.na(df.mix.top20.mock.il$Genus),]
+
+merg.mock <- bind_rows(emu.genus, df.mix.top20.mock,df.mix.top20.mock.il,ref_mock.merg)
+
+# Set emu and kraken2 into Nanopore dataset, and Illumina to Illumina dataset
+merg.mock$Sample <- ifelse(merg.mock$Sample=="sample1","Illumina", merg.mock$Sample)
+merg.mock$Sample <- ifelse(merg.mock$Sample=="sample2","Illumina", merg.mock$Sample)
+merg.mock$Sample <- ifelse(merg.mock$Dataset=="Nanopore","Kraken2", merg.mock$Sample)
+merg.mock$Dataset <- ifelse(merg.mock$Dataset=="Emu","Nanopore", merg.mock$Dataset)
+
+# Retrieve genus, abundance and ID from emu data
+emu.genus <- emu %>% select(genus,abundance,Id)
+emu.genus$abundance <- emu.genus$abundance * 100
+colnames(emu.genus) <- c("Genus","Abundance","Sample")
+emu.genus$Sample <- c("Emu")
+emu.genus$Dataset <- rep("Emu",length(emu.genus$Sample))
+
+#Add reference mock to the plot for comparison
+ref_mock.merg <-data.frame(
+                 Genus=c("Faecalibacterium","Veillonella","Roseburia"
+	,"Bacteroides","Prevotella","Bifidobacterium","Fusobacterium"
+,"Limosilactobacillus","Clostridioides","Akkermansia"
+,"Methanobrevibacter","Salmonella","Enterococcus","Clostridium"
+,"Escherichia","Candida"), Abundance=c(14,14,14,14,6,6,6,6,1.5,
+1.5,0.1,0.01,0.001,0.0001,14,1.5))
+
+ref_mock.merg$Sample=rep("ZymoBIOMICS",length(ref_mock.merg$Genus))
+ref_mock.merg$Dataset=rep("Reference",length(ref_mock.merg$Genus))
+
+
+# Remove redudant characters, then change Escherichia-Shigella to Escherichia 
+merg.mock$Genus <- gsub("_.*", "", merg.mock$Genus)
+merg.mock$Genus  <-ifelse(merg.mock$Genus == "Escherichia-Shigella","Escherichia",merg.mock$Genus )
+
+
+# Set color palette, then plot at genus-level
+color.merg.mock <- c(brewer.pal(11,name="Set3"),brewer.pal(8,name="Set2"),brewer.pal(9,"Set1")) #,brewer.pal(9,"Pastel1"))
+versus.plot.mock <- ggplot(merg.mock, aes(x=Sample, y=Abundance, fill=Genus ))+
+  geom_bar(aes(), stat="identity", position="fill") + 
+    scale_fill_manual(values = color.merg.mock)+ theme(axis.text.x=element_text(),plot.title = element_text(hjust = 0.9))+guides(fill=guide_legend(ncol=1))+
+  facet_nested(~ Dataset, scales="free_x") #+ ggtitle("Water samples sequenced with Illumina and Nanopore")
+versus.plot.mock
+
+```
+
+
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Make plot Class  --------------------------------------------------------------------
+
+# First with Nanopore 
+#Agglomerate taxa at Class level, then sort based on sum of taxa
+gp.mix.mock.nano <- tax_glom(gp.mock, taxrank ="Class",NArm=F)
+top.class.list.mock.nano <- names(sort(taxa_sums(gp.mix.mock.nano),TRUE)[1:10])
+top.class.mock.nano <- prune_taxa(top.class.list.mock.nano,gp.mix.mock.nano)
+proportional_top.mock.nano <- merge_taxa(top.class.mock.nano,"Class")
+gp_prop.mock.nano <- transform_sample_counts(proportional_top.mock.nano,function(x) 100 * x/sum(x))
+df.mix.top20.mock.nano <- psmelt(gp_prop.mock.nano)
+df.mix.top20.mock.nano$Id <- NULL
+df.mix.top20.mock.nano$Dataset <- rep("Nanopore",length(df.mix.top20.mock.nano$Sample))
+
+# Illumina 
+#Agglomerate taxa at Class level, then sort based on sum of taxa
+gp.mix.mock.il.class <- tax_glom(ps.mock.test, taxrank ="Class",NArm=F)
+top.class.list.mock.il.class <- names(sort(taxa_sums(gp.mix.mock.il.class),TRUE)[1:10])
+top.class.mock.il.class <- prune_taxa(top.class.list.mock.il.class,gp.mix.mock.il.class)
+proportional_top.mock.il.class <- merge_taxa(top.class.mock.il.class,"Class")
+gp_prop.mock.il.class <- transform_sample_counts(proportional_top.mock.il.class,function(x) 100 * x/sum(x))
+df.mix.top20.mock.il.class <- psmelt(gp_prop.mock.il.class)
+
+# Remove redundant columns
+df.mix.top20.mock.il.class[4:13] <- NULL
+df.mix.top20.mock.il.class$Dataset <- rep("Illumina",length(df.mix.top20.mock.il.class$Sample))
+
+# Merge data frames
+merg.mock.class <- bind_rows(df.mix.top20.mock.nano,df.mix.top20.mock.il.class,emu.class,ref_mock.class)
+
+# Set emu and kraken2 into Nanopore dataset, and Illumina to Illumina dataset
+merg.mock.class$Sample <- ifelse(merg.mock.class$Sample=="sample1","Illumina", merg.mock.class$Sample)
+merg.mock.class$Sample <- ifelse(merg.mock.class$Sample=="sample2","Illumina", merg.mock.class$Sample)
+merg.mock.class$Sample <- ifelse(merg.mock.class$Dataset=="Nanopore","Kraken2", merg.mock.class$Sample)
+merg.mock.class$Dataset <- ifelse(merg.mock.class$Dataset=="Emu","Nanopore", merg.mock.class$Dataset)
+
+merg.mock.class <- merg.mock.class[!is.na(merg.mock.class$Class),]
+
+# Retrieve class, abundance and ID from emu data
+emu.class <- emu %>% select(class,abundance,Id)
+emu.class$abundance <- emu.class$abundance * 100
+colnames(emu.class) <- c("Class","Abundance","Sample")
+emu.class$Sample <- c("Emu")
+emu.class$Dataset <- rep("Emu",length(emu.class$Sample))
+
+#Add reference mock to the plot for comparison
+ref_mock.class <-data.frame(
+                 Class=c("Clostridia","Negativicutes","Clostridia"
+	,"Bacteroidia","Bacteroidia","Actinomycetia","Fusobacteriia"
+,"Bacilli","Clostridia","Verrucomicrobiae"
+,"Methanobacteria","Gammaproteobacteria","Bacilli","Clostridia"
+,"Gammaproteobacteria"), Abundance=c(14,14,14,14,6,6,6,6,1.5,
+1.5,0.1,0.01,0.001,0.0001,14))
+ref_mock.class$Sample=rep("ZymoBIOMICS",length(ref_mock.class$Class))
+ref_mock.class$Dataset=rep("Reference",length(ref_mock.class$Class))
+
+# Change name since they are the same according to NCBI
+merg.mock.class$Class  <-ifelse(merg.mock.class$Class == "Actinomycetia","Actinobacteria",merg.mock.class$Class )
+
+#Plot the relative abundance at class level
+color.merg.mock <- c(brewer.pal(11,name="Set3"),brewer.pal(8,name="Set2"),brewer.pal(9,"Set1")) #,brewer.pal(9,"Pastel1"))
+versus.plot.mock.class <- ggplot(merg.mock.class, aes(x=Sample, y=Abundance, fill=Class))+
+  geom_bar(aes(), stat="identity", position="fill") + 
+    scale_fill_manual(values = color.merg.mock)+ theme(axis.text.x=element_text(),plot.title = element_text(hjust = 0.9))+guides(fill=guide_legend(ncol=1))+
+  facet_nested(~ Dataset, scales="free_x") #+ ggtitle("Water samples sequenced with Illumina and Nanopore")
+versus.plot.mock.class
+
+# Add two plot into one image
+mock.merged.plot <- plot_grid(versus.plot.mock,versus.plot.mock.spe, labels = c('A','B','C'),label_size = 14,vjust = 2, label_x=0.03, ncol=2.06 )
+mock.merged.plot
+
+ggsave("mock_merged_SpeGe_ill_nano_28aprilLarge_switch.png", plot = mock.merged.plot, width = 40, height = 20, units = "cm",dpi=2000)
+ggsave("mock_merged_species_28april_large.png", plot = versus.plot.mock.spe, width = 40, height = 20, units = "cm",dpi=2000)
+ggsave("mock_merged_genus_21aprilS.pdf", plot = versus.plot.mock, width = 30, height = 20, units = "cm",dpi=2000)
+
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+################################################
+# mock classified on species level
+
+# First with Nanopore 
+# Agglomerate taxa at species level, then sort based on sum of taxa
+gp.mix.mock.nano.Species <- tax_glom(gp.mock, taxrank ="Species",NArm=F)
+top.class.list.mock.nano.Species <- names(sort(taxa_sums(gp.mix.mock.nano.Species),TRUE)[1:20])
+top.class.mock.nano.Species <- prune_taxa(top.class.list.mock.nano.Species,gp.mix.mock.nano.Species)
+proportional_top.mock.nano.Species <- merge_taxa(top.class.mock.nano.Species,"Species")
+gp_prop.mock.nano.Species <- transform_sample_counts(proportional_top.mock.nano.Species,function(x) 100 * x/sum(x))
+df.mix.top20.mock.nano.Species <- psmelt(gp_prop.mock.nano.Species)
+df.mix.top20.mock.nano.Species$Id <- NULL
+df.mix.top20.mock.nano.Species$Dataset <- rep("Nanopore",length(df.mix.top20.mock.nano.Species$Sample))
+
+# Illumina 
+# Agglomerate taxa at species level, then sort based on sum of taxa
+gp.mix.mock.il.Species <- tax_glom(ps.mock.test, taxrank ="Species",NArm=F)
+top.class.list.mock.il.Species <- names(sort(taxa_sums(gp.mix.mock.il.Species),TRUE)[1:20])
+top.class.mock.il.Species <- prune_taxa(top.class.list.mock.il.Species,gp.mix.mock.il.Species)
+proportional_top.mock.il.Species <- merge_taxa(top.class.mock.il.Species,"Species")
+gp_prop.mock.il.Species <- transform_sample_counts(proportional_top.mock.il.Species,function(x) 100 * x/sum(x))
+df.mix.top20.mock.il.Species <- psmelt(gp_prop.mock.il.Species)
+
+
+#### Process the emu data ###
+# Retrieve Species, abundance and sample name
+emu.species <- emu %>% select(species,abundance,Id)
+emu.species$abundance <- emu.species$abundance * 100
+colnames(emu.species) <- c("Species","Abundance","Sample")
+emu.species$Sample <- c("Emu")
+emu.species$Dataset <- rep("Emu",length(emu.species$Sample))
+
+# Remove redundant character and split into Genus and Species
+emu.species$Species <- gsub('_', ' ', emu.species$Species)
+emu.species$Species<-gsub(" [A-Z]?$","",as.character(emu.species$Species))
+emu.species$Species<-gsub(" [A-Z]? "," ",as.character(emu.species$Species))
+emu.species <- emu.species %>% separate(Species, c("Genus","Species"))
+
+# Merge the rows from the data frames kraken2, emu, Illumina and the reference
+merg.mock.species <- bind_rows(df.mix.top20.mock.nano.Species,df.mix.top20.mock.il.Species,ref_mock.Species,emu.species)
+
+# Add emu and kraken2 to Nanopore dataset, and Illumina to Illumina dataset
+merg.mock.species$Sample <- ifelse(merg.mock.species$Dataset=="Nanopore","Kraken2", merg.mock.species$Sample)
+merg.mock.species$Dataset <- ifelse(merg.mock.species$Dataset=="Emu","Nanopore", merg.mock.species$Dataset)
+merg.mock.species$Sample <- ifelse(merg.mock.species$Sample=="sample1","Illumina", merg.mock.species$Sample)
+merg.mock.species$Sample <- ifelse(merg.mock.species$Sample=="sample2","Illumina", merg.mock.species$Sample)
+
+
+#Add reference mock to the plot for comparisons
+ref_mock.Species<-data.frame(
+                 Genus=c("Faecalibacterium","Veillonella","Roseburia"
+	,"Bacteroides","Prevotella","Bifidobacterium","Fusobacterium"
+,"Limosilactobacillus","Clostridioides","Akkermansiaa"
+,"Methanobrevibacter","Salmonella","Enterococcus","Clostridium"
+,"Escherichia","Candida"),
+  Species=c("prausnitzii","rogosae","hominis"
+	,"fragilis","corporis","adolescentis","nucleatum"
+,"fermentum","difficile","muciniphila"
+,"smithii","enterica","faecalis","perfringens"
+,"coli","albicans"), Abundance=c(14,14,14,14,6,6,6,6,1.5,
+1.5,0.1,0.01,0.001,0.0001,14,1.5))
+
+# Add reference name 
+ref_mock.Species$Sample=rep("ZymoBIOMICS",length(ref_mock.Species$Species))
+ref_mock.Species$Dataset=rep("Reference",length(ref_mock.Species$Species))
+
+# Remove redundant character and change E-Shigella to only E 
+merg.mock.species$Species <- gsub("_.*", "", merg.mock.species$Species )
+df.mix.top20.mock.nano.Species$Species <- gsub("_.*", "", df.mix.top20.mock.nano.Species$Species )
+merg.mock.species$Genus <-ifelse(merg.mock.species$Genus == "Escherichia-Shigella","Escherichia",merg.mock.species$Genus )
+
+
+# Add genus and species name
+merg.mock.species$Species <- paste(merg.mock.species$Genus,merg.mock.species$Species,sep=" ")
+
+# Change to correct (1 a too much in the name)
+merg.mock.species$Species <- ifelse(merg.mock.species$Species=="Akkermansiaa muciniphila", "Akkermansia muciniphila",merg.mock.species$Species)
+
+# Plot  at species-level 
+color.merg.mock <- c(brewer.pal(11,name="Set3"),brewer.pal(8,name="Set2"),brewer.pal(9,"Set1")) #,brewer.pal(9,"Pastel1"))
+versus.plot.mock.spe <- ggplot(merg.mock.species, aes(x=Sample, y=Abundance, fill=Species))+
+  geom_bar(aes(), stat="identity", position="fill") + guides(guide_legend(legend.vjust=0.7))+
+    scale_fill_manual(values = color.merg.mock)+ theme(axis.text.x=element_text(),plot.title = element_text(hjust = 0.9), legend.text=element_text(vjust=0.7))+guides(fill=guide_legend(ncol=1))+
+  facet_nested(~ Dataset, scales="free_x") #+ ggtitle("Water samples with Illumina and Nanopore"),legend.text=element_text(size=8)
+versus.plot.mock.spe
+
+
+
+
+
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Dada2 pipeline for Illumina data 
+
+path.mock <- "//16S_mock/bb/R/" # the directory containing the fastq files.
+list.files(path.mock)
+filt <- "//projects/8mock"
+# Forward and reverse fastq filenames have format: SAMPLENAME_r1.fq.gz and SAMPLENAME_r2.fq.gz
+fnFs.m <- sort(list.files(path.mock, pattern="_R1.fastq.gz", full.names = TRUE))
+fnRs.m <- sort(list.files(path.mock, pattern="_R2.fastq.gz", full.names = TRUE))
+
+# Extract sample names, assuming filenames have format: SAMPLENAME_XXX
+sample.names.mock <- sapply(strsplit(basename(fnFs.m), "_R"), `[`, 1)
+
+# visualizing the quality profiles of the forward reads
+plotQualityProfile(fnFs.m[1:3])
+# visualize the quality profile of the reverse reads
+plotQualityProfile(fnRs.m[1:3])
+
+# Place filtered files in filtered/ subdirectory
+filtFs.m <- file.path(filt, "Filtered", paste0(sample.names.mock, "_F_filt.fastq.gz"))
+filtRs.m <- file.path(filt, "Filtered", paste0(sample.names.mock, "_R_filt.fastq.gz"))
+names(filtFs.m) <- sample.names.mock
+names(filtRs.m) <- sample.names.mock
+
+# standard filtering parameters: maxN=0 (DADA2 requires no Ns), truncQ=2, rm.phix=TRUE and maxEE=2,3 (changed from tutorial)
+out.mock <- filterAndTrim(fnFs.m, filtFs.m, fnRs.m, filtRs.m, truncLen=c(280,230),
+              maxN=0, maxEE=c(2,3), truncQ=2, rm.phix=TRUE,
+              compress=TRUE, multithread=TRUE) # On Windows set multithread=FALSE
+head(out.mock) # check data after filtering and trimming
+
+# Learn the Error Rates
+errF.m <- learnErrors(filtFs.m, multithread=TRUE) #, nbases = 1e+06)
+
+errR.m <- learnErrors(filtRs.m, multithread=TRUE) #, nbases = 1e+06)
+
+save.image()
+
+# visualize the estimated error rates
+plotErrors(errF.m, nominalQ=TRUE)
+plotErrors(errR.m, nominalQ=TRUE)
+
+# running the core sample inference algorithm to the filtered and trimmed sequence data
+# The algorithm infers the number of sequence variants from the total unique sequences in each sample
+dadaFs.m <- dada(filtFs.m, err=errF.m, multithread=TRUE)
+dadaRs.m <- dada(filtRs.m, err=errR.m, multithread=TRUE)
+# Inspecting the returned dada-class object
+dadaFs.m[[1]]
+
+# merge the forward and reverse reads together to obtain the full denoised sequences
+mergers.mock <- mergePairs(dadaFs.m, filtFs.m, dadaRs.m, filtRs.m, verbose=TRUE)
+head(mergers.mock[[1]])
+
+# construct an amplicon sequence variant table (ASV) table
+seqtab.mock <- makeSequenceTable(mergers.mock)
+dim(seqtab.mock)
+
+# Inspect distribution of sequence lengths
+table(nchar(getSequences(seqtab.mock)))
+
+# remove chimera sequences
+seqtab.nochim.mock <- removeBimeraDenovo(seqtab.mock, method="consensus", multithread=TRUE, verbose=TRUE)
+dim(seqtab.nochim.mock)
+
+sum(seqtab.nochim.mock)/sum(seqtab.mock)
+
+# Track reads through the pipeline
+getN.m <- function(x) sum(getUniques(x))
+track.mock <- cbind(out.mock, sapply(dadaFs.m, getN.m), sapply(dadaRs.m, getN.m), sapply(mergers.mock, getN.m), rowSums(seqtab.nochim.mock))
+# If processing a single sample, remove the sapply calls: e.g. replace sapply(dadaFs, getN) with getN(dadaFs)
+colnames(track.mock) <- c("input", "filtered", "denoisedF", "denoisedR", "merged", "nonchim")
+rownames(track.mock) <- sample.names.mock
+
+## Write table
+write.table(track,file="/projects/16S_V3V4_test/results/read_preprocess_summary.tsv",quote = FALSE,sep="\t")
+head(track)
+######### NB go back and change trunc length #############
+save.image()
+
+boxplot(as.data.frame(track.mock)$nonchim)
+
+# Assign taxonomy using the silva db
+taxa.mock <- assignTaxonomy(seqtab.nochim.mock, "/home/jonhall/jonhall/silva138/silva_nr99_v138.1_train_set.fa.gz", multithread=TRUE)
+#taxa <- assignTaxonomy(seqtab.nochim, "~/projects/2022/GG_13_8/97_otus_annotated.fasta", multithread=TRUE)
+save.image()
+
+# make species level assignments based on exact matching between ASVs and sequenced reference strains
+taxa.mock <- addSpecies(taxa.mock, "/home/jonhall/jonhall/silva138/silva_species_assignment_v138.1.fa.gz")
+#taxa <- addSpecies(taxa, "/home/jonhall/jonhall/silva138/silva_species_assignment_v138.1.fa.gz")
+
+
+# Retrieve location from sample name
+samples.out.mock <- rownames(seqtab.nochim.mock)
+Location <- as.factor(sapply(strsplit(samples.out.mock, "_"), `[`, 1))
+
+samdf.mock <- data.frame(SampleID = samples.out.mock)
+rownames(samdf.mock) <- samdf.mock$SampleID
+
+
+# Make a plyoseq object
+samdf.mock$SampleID <- rownames(seqtab.nochim.mock)
+head(seqtab.mock)
+ps.mock.test <- phyloseq(otu_table(seqtab.nochim.mock, taxa_are_rows=FALSE), 
+               sample_data(samdf.mock), 
+               tax_table(taxa.mock))
+
+
+
+```
+
+
+```{r setup, include=FALSE}
+# TEST WITH SBDI DATABASE (sbdi 20 genomes r207)
+# Assign taxonomy using the silva db
+
+taxa.mock.new <- assignTaxonomy(seqtab.nochim.mock, "~/storage/sbdi_sativa207_20genomes/gtdb-sbdi-sativa.r07rs207.20genomes.assigntaxonomy.fna.gz", multithread=TRUE)
+#taxa <- assignTaxonomy(seqtab.nochim, "~/projects/GG_13_8/97_otus_annotated.fasta", multithread=TRUE)
+save.image()
+
+# make species level assignments based on exact matching between ASVs and sequenced reference strains
+taxa.mock.new <- addSpecies(taxa.mock.new , "~/storage/sbdi_sativa207_20genomes/gtdb-sbdi-sativa.r07rs207.20genomes.addspecies.fna.gz")
+#taxa <- addSpecies(taxa, "/home/jonhall/jonhall/silva138/silva_species_assignment_v138.1.fa.gz")
+
+# Make a vector with location names from rownames
+samples.out.mock <- rownames(seqtab.nochim.mock)
+Location <- as.factor(sapply(strsplit(samples.out.mock, "_"), `[`, 1))
+
+# Add new rownames to the data frame
+samdf.mock <- data.frame(SampleID = samples.out.mock)
+rownames(samdf.mock) <- samdf.mock$SampleID
+
+
+# Make a phyloseq object
+ps.mock.test.new  <- phyloseq(otu_table(seqtab.nochim.mock, taxa_are_rows=FALSE), 
+               sample_data(samdf.mock), 
+               tax_table(taxa.mock.new ))
+
+# melt the phyloseq object to a data frame
+df.mock.test.new <- psmelt(ps.mock.test.new )
+
+
+```
+
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+gp.mix.mock.species <- tax_glom(gp.mock, taxrank ="Species",NArm=F)
+gp.mix.mock.species <- psmelt(gp.mix.mock.species)
+
+gp.mix.mock.il.species <- tax_glom(ps.mock.test, taxrank ="Species",NArm=F)
+gp.mix.mock.il.species <- psmelt(gp.mix.mock.il.species)
+```
+
+
