@@ -1,0 +1,700 @@
+---
+title: "100samples"
+output: html_document
+date: '2023-03-03'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# (Old 100samples_plot.rmd file)
+
+# Import the biom file
+s100 <- import_biom("100samples/100samples.biom") # Water samples
+mock_samples <- import_biom("mock/mocksamples.biom")
+
+sample_names(s100)
+sample_names(mock_samples)
+
+
+# Visual representation of the diversity inside the samples (i.e., α diversity)
+plot_richness(physeq = s100, 
+              x= "Location",measures = c("Chao1")) 
+
+# Remove unwanted characters of the sample names and ID-names
+s100@sam_data[["Id"]] <- gsub("_bracken_.*$", "", s100@sam_data[["Id"]])
+sample_names(s100) <- gsub("_bracken_.*$", "", sample_names(s100))
+sample_names(s100)
+
+
+
+# Receive taxtable from 100-samples and mock
+tax_100 = tax_table(s100)
+taxM = tax_table(mock_samples)
+
+# Receive otu-table
+otu_100 = otu_table(s100)
+otuM = otu_table(mock_samples)
+
+# Receive sample-data from mock and 50-samples
+sam_100 = sample_data(s100)
+sam_M = sample_data(mock_samples)
+
+# Merge tax-table and otu-table
+tax_merge_100 =merge_phyloseq(tax_100, taxM)
+otu_merge_100 = merge_phyloseq(otu_100,otuM)
+
+# Merge sample data
+sam_merge_100 <- rbind(samM, sam_100)
+#-----------------------------------------------------
+# Make sample data from the biom-files
+
+# The location the sample is from, ex 3M.
+samples_to_biom_100 <- rownames(sam_merge_100)
+Location_samples100 <- as.factor(sapply(strsplit(samples_to_biom_100, "_"), `[`, 1))
+
+
+#################### TEST TO ADD DIFFERENT ENV::::::::::::::::::::::::::::
+st100 <- data.frame(SampleID = samples_to_biom_100, SourceSink=rep("sink",length(samples_to_biom_100)),Env=Location_samples100)
+rownames(st100) <- samples_to_biom_100
+st100$SourceSink <- ifelse(st100$Env =="MOCK", "source", "sink")
+
+# Add location (Env1) based on sampleID. Location removed due to classified data, change X to the location where you took the sample
+st100 <- st100 %>%
+  mutate(Location = case_when(
+    startsWith(SampleID, "3R") ~ "X",
+  ))
+
+# Merge otu, sampledata and tax-table into phyloseq
+ps_ts100 <- phyloseq(otu_merge_100, 
+               sample_data(st100), 
+               tax_merge_100)
+
+
+### PCA PLOT 100 samples and mock #######################
+
+#Transform to even sampling depth
+pca_100samples <- transform_sample_counts(ps_ts100, function(otu_merge_100) otu_merge_100/sum(otu_merge_100))
+bray_100samp <- ordinate(pca_100samples, method="NMDS", distance="bray")
+plot_pca100sam <- plot_ordination(pca_100samples, bray_100samp, color="Location", title="Bray PCoA 100 samples location", label= "Location")
+
+plot_pca100sam
+
+
+# Same approach was performed on spiked and 50samples
+# PCA FOR SPIKED AND 50SAMPLES
+pca_100samplesM <- transform_sample_counts(ps_ts100M, function(otu_merge_100M) otu_merge_100M/sum(otu_merge_100M))
+bray_100sampM <- ordinate(pca_100samplesM, method="NMDS", distance="bray")
+plot_pca100samM <- plot_ordination(pca_100samplesM, bray_100sampM, color="Location", title="Bray PCoA 100 samples and spikes location", label= "EnvDil")
+#plot_pca100samM + scale_color_brewer(type="qual",palette="Set1")
+plot_pca100samM
+
+# Plot the PCA plot for 100 samples, and 50samples+spiked
+library(cowplot)
+pca100_plots <- plot_grid(plot_pca100sam,plot_pca100samM)
+pca100_plots
+
+# Plot certain bacterias
+#Plot to see e.coli and Enterococcus 
+s100_genus <- pca_100samples
+sample_names(s100_genus)
+s100_genus@tax_table@.Data <- substring(s100_genus@tax_table@.Data, 4)
+colnames(s100_genus@tax_table@.Data)<- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species")
+view(s100_genus@tax_table@.Data)
+
+#plot E.coli
+gp_coli = subset_taxa(s100_genus,Genus=="Escherichia")#Family=="Enterobacteriaceae") #
+bar_coli <- plot_bar(gp_coli,"Genus",fill="Species",facet_grid = ~Location)+ ggtitle("Escherichia Genus") +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank() 
+        )
+bar_coli
+
+#Plot Campylobacter with species, the only Coli that could be found
+gp_entere = subset_taxa(s100_genus,Family=="Campylobacteraceae")
+bar_camp <- plot_bar(gp_entere,"Family",fill="Species",facet_grid = ~Env1)+ ggtitle("Campylobacteraceae Family")
+bar_camp
+
+#Plot Enterococcus with grids as location and Family with Genus-fill
+gp_coli_fam = subset_taxa(s100_genus,Family=="Enterococcaceae")
+bar_entero <- plot_bar(gp_coli_fam,"Family",fill="Genus",facet_grid = ~Location)+ggtitle("Enterococcaceae Family")+
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank() 
+        )
+
+# Find  species Perfringens
+gp_per = subset_taxa(s100_genus,Genus=="Clostridium")
+bar_clos <- plot_bar(gp_per,"Genus",fill="Species",facet_grid = ~Env1)+ggtitle("Clostridium Genus")
+bar_clos
+
+# Find Faecalibacterium
+gp_fae = subset_taxa(s100_genus,Genus=="Faecalibacterium")
+bar_fae <- plot_bar(gp_fae,"Genus",fill="Species",facet_grid = ~Env1)+ggtitle("Faecalibacterium Genus")
+
+# Plot all in one image
+genus_plot <- plot_grid(bar_coli,bar_camp, bar_entero, bar_clos,bar_fae)
+genus_plot
+
+
+
+```
+
+
+```{r only spiked}
+
+# Spiked water samples (called 50 samples)
+samples.50 <- import_biom("~/projects/sourcetracking/50_samples.biom")
+
+sample_names(samples.50) <- gsub("_bracken_.*$", "", sample_names(samples.50))
+sample_names(samples.50)
+
+# Pick out only spiked samples from "50 samples"
+samples_50_pca_ <- grep("*_\\d{2,3}$",sample_names(samples.50), value=TRUE)
+samples_50_pca_
+samples_50_pca <- prune_samples((sample_names(samples.50) %in% samples.50_), samples.50)
+samples_50_pca
+
+# Remove redundant data
+samples_50_pca@sam_data[["Id"]] <- gsub("_bracken_.*$", "", samples_50_pca@sam_data[["Id"]])
+sample_names(samples_50_pca) <- gsub("_bracken_.*$", "", sample_names(samples_50_pca))
+sample_names(samples_50_pca)
+
+
+# Receive spike tax
+tax_spike =tax_table(spiked)
+tax_50slim =tax_table(samples_50_pca)
+
+# Receive otu-table from spike
+otu_spike =otu_table(spiked)
+otu_50slim =otu_table(samples_50_pca)
+
+# Receive sample-data from spike
+sam_spike = sample_data(spiked)
+sam_50slim =sample_data(samples_50_pca)
+
+# Merge tax-table, otu-table and sample data
+tax_merge_spike=merge_phyloseq(tax_spike, tax_50slim, taxM)
+otu_merge_spike = merge_phyloseq(otu_spike, otu_50slim, otuM)
+sam_merge_50Sp <- rbind(sam_50slim, sam_spike, samM)
+
+#-----------------------------------------------------
+# Make sample data from the biom-files
+
+# The location the sample is from, ex 3M.
+samples_to_biomSp <- rownames(sam_merge_50Sp)
+Location_samples_spike <- as.factor(sapply(strsplit(samples_to_biomSp, "_"), `[`, 1))
+
+#Add sampleID, SourceSink and Env to sample data.
+samples_df_spike <- data.frame(SourceSink=rep("sink",length(samples_to_biomSp)),Env=Location_samples_spike)
+colnames(samples_df_spike)<- c("SourceSink","Env")
+
+st_spike <- data.frame(SampleID = samples_to_biomSp, SourceSink=rep("sink",length(samples_to_biomSp)),Env=Location_samples_spike)
+rownames(st_spike) <- samples_to_biomSp
+
+
+# Add location (Env1) based on sampleID. Location removed due to classified data, change X to the location where you took the sample
+st_spike <- st_spike %>%
+    mutate(Env1 = case_when(
+    startsWith(SampleID, "3R") ~ "X"
+  ))
+
+# Add dilution (Envdil) based on last character of sampleID
+st_spike <- st_spike %>%
+  mutate(EnvDil = case_when(
+    endsWith(SampleID, "_025") ~ "0,25",
+    endsWith(SampleID, "_05") ~ "0,5",
+    endsWith(SampleID, "_075") ~ "0,75",
+    endsWith(SampleID, "_01") ~ "0,1", 
+    endsWith(SampleID, "_1") ~ "1",
+    endsWith(SampleID, "_10") ~ "10",
+    TRUE ~ 'MOCK'))
+    
+view(st_spike)
+
+ps_ts50_spike <- phyloseq(otu_merge_spike, 
+               sample_data(st_spike), 
+               tax_merge_spike)
+
+### PCA PLOT spiked samples and mock
+#Transform to even sampling depth
+pca_50spike <- transform_sample_counts(ps_ts50_spike , function(otu_merge_spike) otu_merge_spike/sum(otu_merge_spike))
+bray_50spik <- ordinate(pca_50spike, method="NMDS", distance="bray")
+plot_pca50spik <- plot_ordination(pca_50spike, bray_50spik, color="Env1", title="Bray NMDS spikes location", label= "EnvDil")
+
+plot_pca50spik
+plot50_ell <- plot_pca50spik + stat_ellipse(geom = "polygon", type="norm", alpha=0.4, aes(fill=Env1))
+plot50_ell
+
+
+# Composition of the spikes
+library(dplyr)
+
+ps_ts50_spike@tax_table@.Data <- substring(ps_ts50_spike@tax_table@.Data, 4)
+colnames(ps_ts50_spike@tax_table@.Data)<- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species")
+
+# Transform to percentages
+perc_ts50 <- transform_sample_counts(ps_ts50_spike, function(x) x*100 / sum(x) )
+head(perc_ts50@otu_table@.Data)
+
+# Group all the OTUs that have the same taxonomy at a certain taxonomic rank
+perc_50_glom <- tax_glom(perc_ts50, taxrank = 'Species')
+View(perc_50_glom@tax_table@.Data)
+
+# melts phyloseq objects into a data.frame
+perc_df_50dil <- psmelt(perc_50_glom)
+str(perc_df_50dil)
+
+# Sort based on abundance
+top20_50samples <- perc_df_50dil[order(perc_df_50dil$Abundance, decreasing = TRUE), ]
+
+# Top 20 highest values by group
+top20_50samples<- Reduce(rbind,
+                         by(top20_50samples,
+                            top20_50samples["SampleID"],
+                            head,
+                            n = 20))
+
+# Plot spiked samples with mock reference. Grid into the locations 
+top20_50samples$Species <- as.factor(top20_50samples$Species)
+Species_color50 <- colorRampPalette(brewer.pal(8,"Dark2")) (length(levels(top20_50samples$Species)))
+relative_plot50 <- ggplot(data=top20_50samples, aes(x=SampleID, y=Abundance, fill=Species))+ facet_grid(~Env1, scales="free_x")+
+  geom_bar(aes(), stat="identity", position="fill")+
+    scale_fill_manual(values = Species_color50)+ theme(axis.text.x=element_text(angle=90, vjust=0.5),plot.title = element_text(hjust = 0.5))+ ggtitle(" Spiked samples")
+relative_plot50
+
+```
+
+## Including Plots
+
+```{r spikes without mock}
+
+# Spiked samples without the mock
+tax_merge_spike_wo=merge_phyloseq(tax_spike, tax_50slim)
+otu_merge_spike_wo = merge_phyloseq(otu_spike, otu_50slim)
+sam_merge_50Sp_wo <- rbind(sam_50slim, sam_spike)
+
+#-----------------------------------------------------
+# Make sample data from the biom-files
+
+# The location the sample is from, ex 3M.
+samples_wo <- rownames(sam_merge_50Sp_wo)
+Location_wo <- as.factor(sapply(strsplit(samples_wo, "_"), `[`, 1))
+
+#Add sampleID, SourceSink and Env to sample data.
+samples_df_wo <- data.frame(SourceSink=rep("sink",length(samples_wo)),Env=Location_wo)
+colnames(samples_df_wo)<- c("SourceSink","Env")
+
+st_wo <- data.frame(SampleID = samples_wo, SourceSink=rep("sink",length(samples_wo)),Location=Location_wo)
+rownames(st_wo) <- samples_wo
+
+# Add location (Env1) based on sampleID. Location removed due to classified data, change X to the location where you took the sample
+st_wo <- st_wo %>%
+    mutate(Location = case_when(
+    startsWith(SampleID, "3R") ~ "X", 
+  ))
+
+# Add dilution (Envdil) based on last character of sampleID
+st_wo <- st_wo %>%
+  mutate(EnvDil = case_when(
+    endsWith(SampleID, "_025") ~ "0.25",
+    endsWith(SampleID, "_05") ~ "0.5",
+    endsWith(SampleID, "_075") ~ "0.75",
+    endsWith(SampleID, "_01") ~ "0.1",
+    endsWith(SampleID, "_1") ~ "1 ",
+    endsWith(SampleID, "_10") ~ "10",
+    TRUE ~ 'MOCK'))
+
+view(st_wo)
+
+# Merge into a phyloseq object
+ps_ts50_wo <- phyloseq(otu_merge_spike_wo, 
+               sample_data(st_wo), 
+               tax_merge_spike_wo)
+
+### PCA PLOT spiked samples
+#Transform to even sampling depth
+pca_50_wo <- transform_sample_counts(ps_ts50_wo , function(otu_merge_spike_wo) otu_merge_spike_wo/sum(otu_merge_spike_wo))
+bray_50_wo <- ordinate(pca_50_wo, method="NMDS", distance="bray")
+plot_pca50_wo <- plot_ordination(pca_50_wo, bray_50_wo, color="Location", title="Mock spiked samples") + theme(plot.title = element_text(hjust = 0.5)) #, label= "EnvDil") #geom_text(label= "EnvDil",size=2, vjust=1.5)
+
+plot_pca50_wo
+
+# Make the same plot black and white symbols instead of color
+plot_pca50_wo <- plot_pca50_wo + theme_bw() + geom_text(mapping = aes(label = EnvDil), size = 3,vjust= 1.4 , hjust = 1.2) + geom_point(size = 3)+ 
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Add ellipse to the PCA plot
+plot_wo_ell <- plot_pca50_wo + stat_ellipse( type="norm", alpha=0.4, aes(fill=Location)) #+stat_ellipse(geom = "polygon", type="norm", alpha=0.4, aes(fill=Location))
+plot_wo_ell
+
+# Save image
+ggsave("NMDS_spiked_samplesFIXED_DOWN.png", plot = plot_pca50_wo, width = 30, height = 20, units = "cm",dpi=1080)
+ggsave("NMDS_spiked_samples_ellipse_FIXED_DOWN.png", plot = plot_wo_ell, width = 30, height = 20, units = "cm",dpi=1080)
+plot_richness(pca_50_wo, x="Location", measures=c("Chao1"), color="Time")
+
+#Plot with and without mock
+plot_diff <- plot_grid(plot_pca50_wo,plot_pca50spik)
+plot_diff
+```
+
+
+```{r 100 samples run with DB EMU}
+
+# 100 samples run with GTDB curated emu database
+
+library(data.table)
+# read file path
+all_100_emu <-
+  list.files(path = "~/100samples/emu/nanopore",
+             pattern = "*rel-abundance.tsv",
+             full.names = TRUE)
+
+# read file content
+all_content_emu100 <-
+  all_100_emu %>%
+  lapply(read.table,
+         header = TRUE,
+         sep = "\t",
+         encoding = "UTF-8")
+
+# read file name
+all_filenames_emu100 <- all_100_emu %>%
+  basename() %>%
+  as.list()
+
+# combine file content list and file name list
+all_lists_emu100 <- mapply(c, all_content_emu100, all_filenames_emu100, SIMPLIFY = FALSE)
+
+# unlist all lists and change column name
+all_result_emu100 <- rbindlist(all_lists_emu100, fill = T)
+# change column name
+names(all_result_emu100)[14] <- "Id"
+
+# kortar ner namnet, 10 står för antal tecken som ska vara kvar. 
+all_result_emu100$Id<- strtrim(all_result_emu100$Id,11)
+
+# Remove empty rows
+emu <- all_result_emu100[!(all_result_emu100$species==""),]
+
+# multiply with 100 to get in percentage
+all_result_emu100$abundance <- all_result_emu100$abundance * 100
+
+
+# Sort based on abundance 
+top20_emu <- all_result_emu100[order(all_result_emu100$abundance, decreasing = TRUE), ]
+top20_emu$sampleId <- sapply(strsplit(top20_emu$Id, "_"), `[`, 1)
+top20_emu <- as.data.frame(top20_emu)
+
+# Top 10 highest values by group
+top20_emu <- Reduce(rbind,
+                    by(top20_emu,
+                       top20_emu["sampleId"],
+                       head,
+                       n = 10))
+
+# Remove underscore in the name 
+top20_emu$species <- gsub('_', ' ', top20_emu$species)
+
+# Plot 
+top20_emu$species <- as.factor(top20_emu$species)
+Species_color100emu <- colorRampPalette(brewer.pal(8,"Dark2")) (length(levels(top20_emu$species)))
+relative_plot100emu <- ggplot(data=top20_emu, aes(x=sampleId, y=abundance, fill=species))+ #facet_grid(.~Env1 )+
+  geom_bar(aes(), stat="identity", position="stack")+
+    scale_fill_manual(values = Species_color100emu)+ theme(axis.text.x=element_text(angle=90, vjust=0.5),plot.title = element_text(hjust = 0.5))+ ggtitle(" test")
+
+relative_plot100emu
+
+
+################### 
+# The default db from EMU
+
+all_100_emudef <-
+  list.files(path = "100samples/emu/def_db/nanopore",
+             pattern = "*rel-abundance.tsv",
+             full.names = TRUE)
+
+# read file content
+all_content_emu100def <-
+  all_100_emudef %>%
+  lapply(read.table,
+         header = TRUE,
+         sep = "\t",
+         encoding = "UTF-8")
+
+# read file name
+all_filenames_emu100def <- all_100_emudef %>%
+  basename() %>%
+  as.list()
+
+# combine file content list and file name list
+all_lists_emu100def <- mapply(c, all_content_emu100def, all_filenames_emu100def, SIMPLIFY = FALSE)
+
+# unlist all lists and change column name
+all_result_emu100def <- rbindlist(all_lists_emu100def, fill = T)
+# change column name
+names(all_result_emu100def)[14] <- "Id"
+
+# kortar ner namnet, 10 står för antal tecken som ska vara kvar. 
+all_result_emu100def$Id<- strtrim(all_result_emu100def$Id,11)
+
+# Remove empty rows
+emudef <- all_result_emu100def[!(all_result_emu100def$species==""),]
+
+# multiply with 100 to get in percentage
+emudef$abundance <- emudef$abundance * 100
+
+# Sort based on abundance 
+top20_emuDEF <- emudef[order(emudef$abundance, decreasing = TRUE), ]
+top20_emuDEF$sampleId <- sapply(strsplit(top20_emuDEF$Id, "_"), `[`, 1)
+top20_emuDEF <- as.data.frame(top20_emuDEF)
+
+# Top 10 highest values by group
+emu_def <- Reduce(rbind,
+                    by(top20_emuDEF,
+                       top20_emuDEF["sampleId"],
+                       head,
+                       n = 10))
+
+# Plot abundance of emu mock-samples
+emudef$species <- as.factor(emudef$species)
+spec_clr_defEmu<- colorRampPalette(brewer.pal(8,"Dark2")) (length(levels(emudef$species)))
+rel_plot_emudef<- ggplot(data= emudef, aes(x=Id, y=abundance, fill=species))+ 
+    geom_bar(aes(), stat="identity", position="stack")+
+    scale_fill_manual(values = spec_clr_defEmu)+ theme(axis.text.x=element_text(angle=12, vjust=0.5))
+
+rel_plot_emudef
+
+
+```
+
+
+```{r}
+
+# Plot top 20 species and separate the environments.
+library(dplyr)
+
+sample_names(s100biom)
+
+abund.100 <- s100biom
+sample_names(abund.100)
+
+
+abund.100@tax_table@.Data <- substring(abund.100@tax_table@.Data, 4)
+colnames(abund.100@tax_table@.Data)<- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species")
+
+# Transform to percentages
+perc_abund.100<- transform_sample_counts(abund.100, function(x) x*100 / sum(x) )
+head(perc_abund.100@otu_table@.Data)
+
+# Group all the OTUs that have the same taxonomy at a certain taxonomic rank
+perc_abund.100_glom <- tax_glom(perc_abund.100, taxrank = 'Species')
+View(perc_abund.100_glom@tax_table@.Data)
+
+# melts phyloseq objects into a data.frame
+perc_df_100abdil <- psmelt(perc_abund.100_glom)
+str(perc_df_100abdil)
+
+# Add location
+perc_df_100abdil$SampleID <- as.factor(sapply(strsplit(perc_df_100abdil$Sample, "_"), `[`, 1))
+
+# Add location (Env1) based on sampleID. Location removed due to classified data, change X to the location where you took the sample
+perc_df_100abdil <- perc_df_100abdil %>%
+    mutate(Location = case_when(
+    startsWith(Sample, "3R") ~ "X"
+  ))
+
+#  Sort based on abundance and choose top 20
+selectedRows <- perc_df_100abdil[grep("T", perc_df_100abdil$SampleID), ]
+selrow_ab <- selectedRows%>%
+  dplyr::group_by(SampleID)%>%
+  dplyr::mutate(Group = ifelse(Abundance >= sort(Abundance, decreasing=TRUE)[20],
+                        Species, "Unknown"))
+
+
+# Plot
+selrow_ab$Group <- as.factor(selrow_ab$Group)
+Speci_ab100_row <-  colorRampPalette(brewer.pal(8,"Dark2"))(length(levels(selrow_ab$Group)))
+relative_ab100_row <- ggplot(data=selrow_ab, aes(x=Sample, y=Abundance, fill=Group ))+ facet_grid(~SampleID, scales="free_x")+
+  geom_bar(aes(), stat="identity", position="fill")+
+    scale_fill_manual(values = Speci_ab100_row)+ theme(axis.text.x=element_text(angle=90, vjust=0.5),plot.title = element_text(hjust = 0.5))+ ggtitle(" Water samples")
+relative_ab100_row
+
+
+######################################################################################################################################
+# Using plotbar function for plotting 100 samples
+
+# Get top 20 taxa 
+top20_10samples <- names(sort(taxa_sums(abund.100), decreasing=TRUE))[1:30]
+ps.top20_100samples <- transform_sample_counts(abund.100, function(abund.100) abund.100/sum(abund.100))
+ps.top20_100samples <- prune_taxa(top20_10samples,ps.top20_100samples)
+
+view(ps.top20_100samples@tax_table)
+df_top20 <- psmelt(ps.top20_100samples)
+
+# Remove unwanted character of the sample name
+df_top20$SampleID <- as.factor(sapply(strsplit(df_top20$Sample, "_"), `[`, 1))
+
+## Add location (Location) based on sampleID. Location removed due to classified data, change X to the location where you took the sample
+df_top20 <- df_top20 %>%
+    mutate(Location = case_when(
+    startsWith(Sample, "3R") ~ "X"
+  ))
+
+# Add another column with full name (Genus and Specie)
+df_top20$name <- paste(df_top20$Genus,df_top20$Species,sep=" ")
+
+# Grep only certain samples
+text_grep <- c("T","3R", "3M")
+
+# Filter and keep only the wanted samples
+df_top20.<- filter(df_top20,grepl(paste(text_grep,collapse='|'),SampleID))
+
+# Plot
+df_top20.$name  <- as.factor(df_top20.$name )
+Speci_df.100sam <-  c(brewer.pal(11,name="Set3"),brewer.pal(8,name="Set2"),brewer.pal(9,"Set1"),brewer.pal(8,"Dark2")) 
+relative_df.100sam <- ggplot(data=df_top20., aes(x=Sample, y=Abundance, fill=name ))+ facet_grid(~SampleID, scales="free_x")+
+  geom_bar(aes(), stat="identity", position="fill")+
+    scale_fill_manual(values = Speci_df.100sam)+ theme(axis.text.x=element_text(angle=90, vjust=0.5),plot.title = element_text(hjust = 0.5))+ ggtitle(" Water samples")
+relative_df.100sam
+
+```
+
+
+```{r setup, include=FALSE}
+######################################################################################################################################
+# Plot  for 100 samples with other parameter settings of the data
+
+# Get top 20 taxa 
+top20_10samplesD <- names(sort(taxa_sums(s100d), decreasing=TRUE))[1:30]
+ps.top20_100samplesD <- transform_sample_counts(s100d, function(s100d) 100*s100d/sum(s100d))
+ps.top20_100samplesD <- prune_taxa(top20_10samplesD,ps.top20_100samplesD)
+
+view(ps.top20_100samplesD@tax_table)
+
+taxo_names <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species")
+colnames(ps.top20_100samplesD@tax_table@.Data)<- taxo_names
+df_top20D <- psmelt(ps.top20_100samplesD)
+
+# Remove the first *_ part in the tax-name
+df_top20D$species <- gsub("^s_*", "",df_top20D$Species)
+df_top20D$genus <- gsub("^g_*", "",df_top20D$Genus)
+
+# Remove unwanted character of the sample name
+df_top20D$SampleID <- as.factor(sapply(strsplit(df_top20D$Sample, "_"), `[`, 1))
+
+## Add location (Location) based on sampleID. Location removed due to classified data, change X to the location where you took the sample
+df_top20D <- df_top20D %>%
+    mutate(Location = case_when(
+    startsWith(Sample, "3R") ~ "X"
+  ))
+
+# Add another column with full name (Genus and Specie)
+df_top20D$Species <- paste(df_top20D$genus,df_top20D$species,sep=" ")
+
+# Samples to keep
+text_grep <- paste(c("T","3R", "3M","8","5","6","7","12","13"),collapse = '|')
+
+# Filter and keep only wanted samples
+df_top20D.<- filter(df_top20D,grepl(paste(text_grep,collapse='|'),SampleID))
+
+# Plot the relative abundance 
+df_top20D.$Species <- as.factor(df_top20D.$Species )
+Speci_df.100samD <-  c(brewer.pal(11,name="Set3"),brewer.pal(8,name="Set2"),brewer.pal(9,"Set1"),brewer.pal(8,"Dark2")) #colorRampPalette(brewer.pal(8,"Dark2"))(length(levels(df_top20$name)))#
+relative_df.100samD <- ggplot(data=df_top20D., aes(x=Sample, y=Abundance, fill=Species ))+ facet_grid(~SampleID, scales="free_x")+
+  geom_bar(aes(), stat="identity", position="fill")+ #
+    scale_fill_manual(values = Speci_df.100samD)+ theme(axis.text.x=element_blank() ,plot.title = element_text(hjust = 0.5))+ ggtitle(" Water samples")
+relative_df.100samD
+
+# Plot grid with both parameter settings in one image 
+completeplots <- plot_grid(relative_df.100sam, relative_df.100samD, ncol=1)
+completeplots
+
+# ###########################################
+# TEST WITHOUT PRUNING THE SAMPLE TO TOP 30
+
+
+plotbar.100sample <- transform_sample_counts(s100d, function(s100d) s100d/sum(s100d))
+plot_bar(plotbar.100sample, fill="Rank1")
+
+plotbar.100sample.top30 <- names(sort(taxa_sums(plotbar.100sample), decreasing=TRUE))[1:30]
+plotbar.100sample <- prune_taxa(plotbar.100sample.top30,plotbar.100sample)
+
+
+df_top20.test <- psmelt(plotbar.100sample)
+
+# Location removed due to classified data, change X to the location where you took the sample
+df_top20.test  <- df_top20.test  %>%
+    mutate(Location = case_when(
+    startsWith(Sample, "3R") ~ "X"
+  ))
+
+# Keep only wanted samples 
+df_top20.test$SampleID <- as.factor(sapply(strsplit(df_top20.test$Sample, "_"), `[`, 1))
+df_top20.test1<- filter(df_top20.test,grepl(paste(text_grep,collapse='|'),SampleID))
+
+# Plot the relative abundance
+df_top20.test1$Rank7 <- as.factor(df_top20.test1$Rank7 )
+plot.rank7 <-  c(brewer.pal(11,name="Set3"),brewer.pal(8,name="Set2"),brewer.pal(9,"Set1"),brewer.pal(8,"Dark2")) 
+relat.plot.rank7 <- ggplot(data=df_top20.test1, aes(x=Sample, y=Abundance, fill=Rank7 ))+ facet_grid(~SampleID, scales="free_x")+
+  geom_bar(aes(), stat="identity", position="fill")+ 
+    scale_fill_manual(values = plot.rank7)+ theme(axis.text.x=element_blank(),plot.title = element_text(hjust = 0.5))+ ggtitle(" Water samples")
+relative_df.100samD
+
+ggsave("Water_samples.png", plot = relative_df.100samD, width = 30, height = 20, units = "cm",dpi=1080)
+
+
+########## As before but changing the locations and samples to plot #########
+# Grep different locations 
+text_grep1 <-c("25","26","27","28","29","3","31","32","33","3M","3O","3R") # Part 1
+text_grep2 <-c("2","5","6","8","12") # Part 2 
+
+
+# Remove unwanted samples, part 1
+df_top20D_<- filter(df_top20D,grepl(paste(text_grep1,collapse='|'),SampleID))
+df_top20D_ <- df_top20D_[- grep("13", df_top20D_$SampleID),]
+df_top20D_ <- df_top20D_[- grep("T3", df_top20D_$SampleID),]
+
+# Plot wanted samples (Part 1)
+df_top20D_$Species <- as.factor(df_top20D_$Species )
+Speci_df.100samD_ <-  c(brewer.pal(11,name="Set3"),brewer.pal(8,name="Set2"),brewer.pal(9,"Set1"),brewer.pal(8,"Dark2")) #colorRampPalette(brewer.pal(8,"Dark2"))(length(levels(df_top20$name)))#
+relative_df.100samD_ <- ggplot(data=df_top20D_, aes(x=Sample, y=Abundance, fill=Species ))+ facet_grid(~SampleID, scales="free_x")+
+  geom_bar(aes(), stat="identity", position="fill")+ #
+    scale_fill_manual(values = Speci_df.100samD_)+ theme(axis.text.x=element_blank() ,plot.title = element_text(hjust = 0.5))+ ggtitle(" Water samples")
+relative_df.100samD_
+ggsave("Water_samples_del2.png", plot = relative_df.100samD_, width = 30, height = 20, units = "cm",dpi=1080)
+
+
+# Remove unwanted samples, part 2
+df_top20Dlast<- filter(df_top20D,grepl(paste(text_grep2,collapse='|'),SampleID))
+df_top20Dlast <- df_top20Dlast[- grep("32", df_top20Dlast$SampleID),]
+df_top20Dlast <- df_top20Dlast[- grep("T6", df_top20Dlast$SampleID),]
+
+# Plot wanted samples (Part 2)
+df_top20Dlast$Species <- paste(df_top20Dlast$genus,df_top20Dlast$species,sep=" ")
+df_top20Dlast$Species <- as.factor(df_top20Dlast$Species )
+Speci_df.100samD_l <-  c(brewer.pal(11,name="Set3"),brewer.pal(8,name="Set2"),brewer.pal(9,"Set1"),brewer.pal(8,"Dark2")) 
+relative_df.100samD_l <- ggplot(data=df_top20Dlast, aes(x=Sample, y=Abundance, fill=Species ))+ facet_grid(~SampleID, scales="free_x")+
+  geom_bar(aes(), stat="identity", position="fill")+ #
+    scale_fill_manual(values = Speci_df.100samD_l)+ theme(axis.text.x=element_text() ,plot.title = element_text(hjust = 0.5))+ ggtitle(" Water samples")
+relative_df.100samD_l
+ggsave("Water_samples_del3.png", plot = relative_df.100samD_l, width = 30, height = 20, units = "cm",dpi=1080)
+
+```
+
+
+```{r illumi}
+
+ps.illumina <- ps
+
+sample_names(ps.illumina)
+sample_sums(ps.illumina)
+
+df.illumina <- psmelt(ps.illumina)
+
+
+plotbar.ill <- transform_sample_counts(df.illumina, function(df.illumina) df.illumina/sum(df.illumina))
+plot_bar(plotbar.ill, fill="Rank1")
+
+
+
+```
+```
