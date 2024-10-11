@@ -1,0 +1,110 @@
+---
+title: "plot with illumina"
+output: html_document
+date: '2023-03-20'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Retrive Illumina phyloseq object (from x_data:analysis.rmd by David)
+ps.illumina <- ps
+
+sample_names(ps.illumina)
+sample_sums(ps.illumina)
+
+
+# Transform sample counts
+plotbar.ill <- transform_sample_counts(ps.illumina, function(ps.illumina) ps.illumina/sum(ps.illumina))
+
+#Sort taxa sums (top 30), then prune taxa
+plotbar.ill.top30 <- names(sort(taxa_sums(plotbar.ill ), decreasing=TRUE))[1:30]
+plotbar.ill.top30. <- prune_taxa(plotbar.ill.top30,plotbar.ill)
+
+# Melt to data frame
+df.illumina <- psmelt(plotbar.ill.top30.)
+
+# Grep certain samples
+text_grep <- c("T[0-9]","3R", "3M")
+df.illumina.filt <- filter(df.illumina,grepl(paste(text_grep,collapse='|'),Location))
+
+# Plot the relative abundance at Genus-level
+df.illumina.filt$Genus <- as.factor(df.illumina.filt$Genus )
+ill.col <-  c(brewer.pal(11,name="Set3"),brewer.pal(8,name="Set2"),brewer.pal(9,"Set1"),brewer.pal(8,"Dark2")) 
+relat.ill.plot <- ggplot(data=df.illumina.filt, aes(x=Sample, y=Abundance, fill=Genus ))+ facet_grid(~Location, scales="free_x")+
+  geom_bar(aes(), stat="identity", position="fill")+
+    scale_fill_manual(values = ill.col)+ theme(axis.text.x=element_text(angle=90, vjust=0.5),plot.title = element_text(hjust = 0.5))+ ggtitle(" Water samples Illumina")
+relat.ill.plot 
+
+
+##-----------------------------------------------------------------------------------------------
+# Rarefaction curve ----------------------------------------------------------------
+
+library(vegan)
+library(tibble)
+
+# Make data frame from the otu-table retrieved from the 100 water samples
+otu_test.rare <- as.data.frame(otu_100M)
+otu_test.rare <- tibble::rownames_to_column(otu_test.rare,"Taxa")
+write.table(otu_test.rare)
+otu.rare = read.table("otu_test.rare", header=TRUE, row.names = 1, sep=",")
+
+
+otu_test.t <- as.data.frame(otu_test.rare)
+otu_test.t <- otu_test.t %>%
+  select("3M_20210630","3M_20210721","3M_20210823") #,"3M_20210830","3M_20210709")
+otu_test.tt <- (t(otu_test.t))
+S <- specnumber(otu_test.tt)
+raremax <- min(rowSums(otu_test.tt))
+
+#Rarefaction of the samples
+Srare <- rarefy(otu_test.tt, raremax)
+
+#plotting the rarefaction curves
+rare.plot <- plot(S, Srare, xlab = "Observed No. of Species", ylab = "Rarefied No. of Species")
+abline(0, 1)
+rarecurve(otu_test.tt, step =50, sample = raremax, col = "blue", cex = 0.4, )
+rare.plot
+
+
+# Add the Illumina samples
+rare.illumina <- ps.illumina
+
+ps.rarefied = rarefy_even_depth(rare.illumina, rngseed=1, sample.size=0.1*min(sample_sums(rare.illumina )), replace=F)
+
+otu.ill <- otu_table(ps.rarefied )
+otu.ill <- as.data.frame(otu.ill)
+row.to.add <- c("3M_210630","3M_210721","3M_210823")#,"3M_210830","3M_210709",)
+otu_test.ill <- otu.ill[row.to.add,]
+otu_test.ill <- as.matrix(otu_test.ill)
+
+
+
+S2 <- specnumber(otu_test.ill)
+raremax2 <- min(rowSums(otu_test.ill))
+plot(S2, Srare2, xlab = "Observed No. of Species", ylab = "Rarefied No. of Species")
+#Rarefaction of the samples
+Srare2 <- rarefy(otu_test.ill, raremax2)
+rarecurve(otu_test.ill, step =50, sample = raremax, col = "blue", cex = 0.4, )
+
+##########------------------------------------------------------
+# Merge nanopore and Illumina
+library(tidyverse)
+
+otu_test.ill$Id <-rownames(otu_test.ill)
+otu_test.tt$Id <- rownames(otu_test.tt)
+
+comb.rare <- list(otu_test.ill,otu_test.tt)
+comb.rare.df <- Reduce(function(x, y) merge(x, y, all=TRUE), comb.rare)  
+comb.rare.df1 <- bind_rows(comb.rare)
+comb.rare %>% reduce(left_join, by='Id')
+
+
+comb.rare.df$Id <- NULL
+comb.rare.df[is.na(comb.rare.df)] <- 0
+raremax3 <- min(rowSums(comb.rare.df ))
+
+Srare3 <- rarefy(comb.rare.df, raremax3)
+rarecurve(comb.rare.df, step =50, sample = raremax3, col = "blue", cex = 0.4, )
+
+```
