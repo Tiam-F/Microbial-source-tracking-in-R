@@ -1,0 +1,147 @@
+---
+title: "Sourcetracking"
+output: html_document
+date: '2023-02-20'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Loading libraries
+if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+BiocManager::install(c("phyloseq", "microbiome", "ComplexHeatmap"), update = FALSE)
+install.packages(
+  "microViz",
+  repos = c(davidbarnett = "https://david-barnett.r-universe.dev", getOption("repos")))
+
+library(phyloseq)
+library(dplyr)
+
+# Import the biom-files. 
+mock_samples <- import_biom("/mnt/scratch/users/projects/sourcetracking/from_kraken/mock_samples.biom")
+samples_50 <- import_biom("~/projects/sourcetracking/50_samples.biom")
+spiked <- import_biom("/mnt/scratch/users/projects/sourcetracking/from_kraken/1_10ng_realname.biom")
+#---------------------------------------------------------------
+
+sample_names(samples_50)
+sample_names(mock_samples)
+
+# Remove unwanted characters of the sample names and ID-names
+samples_50@sam_data[["Id"]] <- gsub("_bracken_.*$", "", samples_50@sam_data[["Id"]])
+sample_names(samples_50) <- gsub("_bracken_.*$", "", sample_names(samples_50))
+sample_names(samples_50)
+
+spiked@sam_data[["Id"]] <- gsub("_bracken_.*$", "", spiked@sam_data[["Id"]])
+sample_names(spiked) <- gsub("_bracken_.*$", "", sample_names(spiked))
+sample_names(spiked)
+
+mock_samples@sam_data[["Id"]] <- gsub("_bracken_.*$", "", mock_samples@sam_data[["Id"]])
+sample_names(mock_samples) <- gsub("_bracken_.*$", "", sample_names(mock_samples))
+sample_names(mock_samples)
+
+# Receive tax-table from mock,spiked samples and 50-samples
+taxM = tax_table(mock_samples)
+tax_50 = tax_table(samples_50)
+tax_spike =tax_table(spiked)
+
+# Receive otu-table from mock and 50-samples
+otuM = otu_table(mock_samples, taxa_are_rows=FALSE)
+otu_50 = otu_table(samples_50)
+otu_spike =otu_table(spiked)
+
+# Receive sample-data from mock and 50-samples
+samM = sample_data(mock_samples)
+sam_50 = sample_data(samples_50)
+sam_spike = sample_data(spiked)
+
+# Merge tax-table and otu-table
+tax_merge_1 =merge_phyloseq(tax_50, taxM, tax_spike)
+otu_merge_1 = merge_phyloseq(otu_50,otuM, otu_spike)
+otu_merge_fal = merge_phyloseq(otu_50,otuM, otu_spike, taxa_are_rows=FALSE)
+
+# Merge sample data
+sam_merge_50 <- rbind(samM,sam_50, sam_spike)
+
+#-----------------------------------------------------
+# Make sample data from the biom-files
+
+# The location the sample is from, ex 3M.
+samples_to_biom <- rownames(sam_merge_50)
+Location_samples <- as.factor(sapply(strsplit(samples_to_biom, "_"), `[`, 1))
+
+#Add sampleID, SourceSink and Env to sample data.
+samples_df_new <- data.frame(SourceSink=rep("sink",length(samples_to_biom)),Env=Location_samples)
+colnames(samples_df_new)<- c("SourceSink","Env")
+
+
+#################### TEST TO ADD DIFFERENT ENV::::::::::::::::::::::::::::
+st <- data.frame(SampleID = samples_to_biom, SourceSink=rep("sink",length(samples_to_biom)),Env=Location_samples)
+rownames(st) <- samples_to_biom
+st$SourceSink <- ifelse(st$Env =="MOCK", "source", "sink")
+
+# Add location (Env1) based on sampleID. . Location removed due to classified data, change X to the location where you took the sample
+st <- st %>%
+  mutate(Env1 = case_when(
+    startsWith(SampleID, "3R") ~ "X"
+  ))
+
+# Add dilution (Envdil) based on last character of sampleID
+st <- st %>%
+  mutate(EnvDil = case_when(
+    endsWith(SampleID, "_025") ~ "0,25",
+    endsWith(SampleID, "_05") ~ "0,5",
+    endsWith(SampleID, "_075") ~ "0,75",
+    endsWith(SampleID, "_01") ~ "0,1", # 
+    endsWith(SampleID, "_1") ~ "1",
+    endsWith(SampleID, "_10") ~ "10"
+  ))
+    
+# Add source or sink depending on if dilution exists
+st$SourceSink <- ifelse(st$EnvDil %in% NA, "source", "sink")
+
+# Merge otu, sampledata and tax-table into phyloseq
+ps_ts <- phyloseq(otu_merge_1, 
+               sample_data(st), 
+               tax_merge_1)
+
+# Write phyloseq object direct to biom-file
+ps_otu_ts <- as.data.frame(otu_table(ps_ts))
+fin_ts_biom <-make_biom(ps_otu_ts)
+write_biom(fin_ts_biom,"/mnt/scratch/users/projects/sourcetracking/direct_to_biom/complete1.biom")
+
+
+##############################################################################################
+#TESTING TO WRITE TO CSV FOR SOURCEPREDICT (source tracking)
+
+write.csv(ps_otu_ts, "/mnt/scratch/users/projects/sourcepredict/sourcepredict.csv",quote=FALSE) #, row.names=FALSE)
+
+source_dt <- ps_otu_ts[,c("3_20210923","3R_20210830","3M_20210830",
+                          "3_20210823","3R_20210823","3_20210721","3R_20210721","3M_20210721"
+                          ,"3_20210709","3R_20210709","3M_20210709","3_20210630","3R_20210630"
+                          ,"3M_20210630","2_20201030","3_20201030", "MOCK_BC01","MOCK_BC03", "MOCK_BC04","MOCK_BC05","MOCK_BC06")]
+
+sink_dt <- ps_otu_ts[,c("3R_075","3R_05","3R_025","3R_01","3_075","3_05","3_025","3_01","2_075","2_05","2_025","2_01",
+"B_075","B_05","B_025","B_01","2_10","2_1","B_1","B_10","3_1","3R_1","3_10")]
+
+label_dt <- st[,c("SampleID","Env")]
+colnames(label_dt) <- c("","labels")
+
+write.csv(source_dt, "/mnt/scratch/users/projects/sourcepredict/source_50sample.csv",quote=FALSE)
+write.csv(sink_dt, "/mnt/scratch/users/projects/sourcepredict/sink_50sample.csv",quote=FALSE)
+write.csv(label_dt, "/mnt/scratch/users/projects/sourcepredict/label_50sample.csv",row.names=FALSE,quote=FALSE)
+
+
+# Write meta sampledata to txt-file
+write.table(st, "/mnt/scratch/users/projects/sourcetracking/direct_to_biom/sampledata_complete1_added.txt",quote=FALSE,sep="\t",row.names = FALSE)
+
+############ test for using another column as source/sink
+st_ss <- data.frame(st)
+
+# Add source or sink depending on if dilution exists
+st_ss$ss_B <- ifelse(st_ss$Env %in% "B", "sink", "source")
+st_ss$ss_2 <- ifelse(st_ss$Env %in% "2", "sink", "source")
+st_ss$ss_3M <- ifelse(st_ss$Env %in% "3M", "sink", "source")
+st_ss$ss_3 <- ifelse(st_ss$Env %in% "3", "sink", "source")
+st_ss$ss_3R <- ifelse(st_ss$Env %in% "3R", "sink", "source")
+write.table(st_ss, "/mnt/scratch/users/projects/sourcetracking/direct_to_biom/sampledata_complete1_all_ss_added.txt",quote=FALSE,sep="\t",row.names = FALSE)
+
