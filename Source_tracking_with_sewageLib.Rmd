@@ -1,0 +1,211 @@
+---
+title: "st_with_lib"
+output: html_document
+date: '2023-03-23'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#(Cleaned version of st.rmd)
+
+# Import sewage lib biom file 
+
+lib.sew1 <- import_biom("/mnt/scratch/users/tiafit/projects/sourcetracking_with_library/sew_sample_fixed.biom")
+
+# Remove redundant name of the samples
+lib.sew1@sam_data[["Id"]] <- gsub("_bracken_.*$", "", lib.sew1@sam_data[["Id"]])
+sample_names(lib.sew1 ) <- gsub("_bracken_.*$", "", sample_names(lib.sew1 ))
+sample_names(lib.sew1 )
+
+# Retrieve tax- and otu-table, and sample data
+sew.tax = tax_table(lib.sew1)
+sew.otu = otu_table(lib.sew1)
+sam.lib = sample_data(lib.sew1)
+
+# Give 100samples (The sequenced water samples) new variable name (keep only sample (Id))
+sam.100.lib <- label_100dt[,1, drop=FALSE]
+colnames(sam.100.lib)[1] <- "Id"
+
+# Merge tax-table and otu-table
+tax_lib.sp =merge_phyloseq(sew.tax,tx_100sp)
+otu_lib.sp = merge_phyloseq(sew.otu,otu_100sp)
+
+# Merge sample data
+sam.lib.merge <- rbind(sam.lib, sam.100.lib)
+
+
+#Add sampleID, SourceSink and Env to sample data.
+row.sam.lib <- rownames(sam.lib.merge)
+Loc.name.lib <- as.factor(sapply(strsplit(row.sam.lib, "_"), `[`, 1))
+
+df.lib <- data.frame(SampleID=row.sam.lib,SourceSink=rep("sink",length(row.sam.lib)),location=Loc.name.lib)
+
+# Add source or sink depending on if dilution exists
+# Add the locations real name
+sew.names.loc <- sew.names$Sample.Name
+sew.names.loc <- paste(unique(sew.names.loc), collapse = ' ')
+
+# Add source or sink depending on if dilution exists
+sources <- c("2","T")
+df.lib$SourceSink <- ifelse(df.lib$Env %in% sources , "sink","source" )
+df.lib$SourceSink[1:46] <- "source" 
+
+# Add the sampleID as rownames
+rownames(df.lib) <- df.lib$SampleID
+View(otu_lib.sp)
+
+
+# Merge otu, sampledata and tax-table into phyloseq object
+ps_lib <- phyloseq(otu_lib.sp, 
+               sample_data(df.lib), 
+               tax_lib.sp)
+
+# Write phyloseq object direct to biom-file
+ps_lib_ts <- as.data.frame(otu_table(ps_lib))
+ps_lib_ts_biom <-make_biom(ps_lib_ts)
+write_biom(ps_lib_ts_biom,"~/projects/sourcetracking_with_library/files_to_st/lib_for_st_complete_fix.biom")
+
+# Write meta sampledata to txt-file
+write.table(df.lib, "~/projects/sourcetracking_with_library/files_to_st/sam_only_sew_as_source.txt",quote=FALSE,sep="\t",row.names = FALSE)
+
+
+
+#-------- PCA plot of the sew_libs with samples
+
+#Transform to even sampling depth
+pca_sewSamples <- transform_sample_counts(ps_lib , function(otu_lib.sp) otu_lib.sp/sum(otu_lib.sp))
+bray_sewsamp <- ordinate(pca_sewSamples, method="NMDS", distance="bray")
+plot_pcaSewsam <- plot_ordination(pca_sewSamples, bray_sewsamp, color="location", title="Bray NMDS sewage and water samples samples", label= "location")
+
+plot_pcaSewsam
+
+#------------------------------------------------------------------------------------------
+# PCA plot of the sew_libs 
+
+sam.lib.location <- rbind(sam.lib)
+
+sam.lib.location  <- sam.lib.location   %>%
+    mutate(location = case_when(
+    startsWith(Id, "Mil") ~ "sew_Milwaukee",
+    startsWith(Id, "Kene") ~ "sew_Kenedy",
+    startsWith(Id, "Denver") ~ "sew_Denver",
+    startsWith(Id, "Laramie") ~ "sew_Laramie",
+    startsWith(Id, "Juneau") ~ "sew_Juneau",
+    startsWith(Id, "Madison") ~ "sew_Madison",
+    startsWith(Id, "Lincoln") ~ "sew_Lincoln",
+    startsWith(Id, "IowaCity") ~ "sew_IowaCity",
+    startsWith(Id, "Woodmere") ~ "sew_Woodmere",
+    startsWith(Id, "Delano") ~ "sew_Delano",
+    startsWith(Id, "Vancouver") ~ "sew_Vancouver",
+    startsWith(Id, "Honolulu") ~ "sew_Honolulu",
+    startsWith(Id, "Marathon") ~ "sew_Marathon",
+    startsWith(Id, "Whittier") ~ "sew_Whittier",
+    startsWith(Id, "Yuma") ~ "sew_Yuma",
+    startsWith(Id, "Austin") ~ "sew_Austin",
+    startsWith(Id, "Memphis") ~ "sew_Memphis",
+    startsWith(Id, "WestPalmBeach") ~ "sew_WestPalmBeach",
+    startsWith(Id, "Stockton") ~ "sew_Stockton",
+    startsWith(Id, "JohnsCreek") ~ "sew_JohnsCreek",
+    startsWith(Id, "Auburn") ~ "sew_Auburn",
+    startsWith(Id, "Portland") ~ "sew_Portland",
+    startsWith(Id, "GreatFalls") ~ "sew_GreatFalls",
+  ))
+
+# Merge to a phyloseq object 
+ps.lib.sew <- phyloseq(sew.otu, 
+               sample_data(sam.lib.location), 
+               sew.tax)
+
+# Make a PCA plot (or NMDS plot)
+pca_st.Samples <- transform_sample_counts(ps.lib.sew , function(sew.otu) sew.otu/sum(sew.otu))
+bray_st.samp <- ordinate(pca_st.Samples, method="NMDS", distance="bray")
+plot_pca.st <- plot_ordination(pca_st.Samples,bray_st.samp, color="location", title="Bray NMDS sewage samples", label= "location")
+
+# Plot and save the image
+plot_pca.st 
+ggsave("NMDS_sewage_samples.png", plot = plot_pca.st , width = 30, height = 20, units = "cm",dpi=1080)
+
+
+
+############################
+# FIX the FASTA files
+
+# Import the lib sewage fasta-file
+fast.file <- read.fasta("~/projects/sourcetracking_with_library/db_R1.fasta")
+df.fasta <- as.matrix(fast.file)
+m.fasta <- as.data.frame(df.fasta)
+m.fasta <- tibble::rownames_to_column(m.fasta, "name")
+
+df.unl <- df <- data.frame(matrix(unlist(fast.file), nrow=length(fast.file), byrow=TRUE))
+
+df.bind<- cbind(m.fasta, df.unl[1])
+df.bind$V1 <- NULL
+colnames(df.bind)[2] <- "sequences"
+m.fasta <- df.bind
+
+# Extract the counts from the rowname 
+#m.fasta$counts <- gsub("^.*_([0-9]+):", "", m.fasta$name)
+m.fasta$counts <- gsub(".*_count_", "", m.fasta$name)
+fasta.counts <- gsub(":R1", "", m.fasta$counts)
+m.fasta$counts <- as.integer(m.fasta$counts)
+fasta.counts <- as.integer(fasta.counts)
+
+# Multiply the rows with counts 
+m.fasta.final <- m.fasta %>%
+  mutate(fasta.counts = fasta.counts) %>%
+  uncount(fasta.counts)
+
+# Make unique ID for the replicates 
+m.fasta.final$name <- make.unique(m.fasta.final$name)
+rownames(m.fasta.final) <- m.fasta.final$name
+m.fasta.final$counts <- NULL
+
+write.table(m.fasta.final,file= "~/projects/sourcetracking_with_library/df.txt",sep="\t",row.names=FALSE,quote = FALSE)
+
+
+################# FIX sewage sample data rename
+sew.names <- read.table("~/projects/sourcetracking_with_library/sew_names.txt", header=T, sep="\t")
+sew.names <- sew.names[2:4]
+sew.names$name <- paste(sew.names$Sample.Name, sew.names$Collection_Date, sep="_")
+sew.names <- sew.names %>% select(Run, name)
+sew.names <- sew.names %>% select(name, everything())
+write.table(sew.names,file= "~/projects/sourcetracking_with_library/sew_names_fixed.txt",sep="\t",row.names=FALSE,  col.names=FALSE,quote = FALSE)
+
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r }
+# MAKE density plot of the sewage match for both illumina and nanopore
+
+sew.match <- read.table("~/projects/sourcetracking_with_library/SewageMatchFix.txt", header=T, sep="\t")
+sew.match <- read.table("~/projects/sourcetracking_with_library/sew_match.txt", header=T, sep="\t")
+
+# Retrive the rownames to a column
+sew.match$X <-rownames(sew.match)
+
+# Make the values numeric
+sew.match$Percentage <- as.numeric(sew.match$Percentage)
+sew.match$Nanopore <- as.numeric(sew.match$Nanopore)
+sew.match$Illumina <- as.numeric(sew.match$Illumina)
+
+# Plot
+plot()
+Percentage = 1:100
+plot.sew.match <- ggplot(sew.match,aes(x=Sample, y=Percentage, fill=Dataset)) + geom_bar(stat="identity", position=position_dodge(width = 0.5),color="black") + theme_bw()+
+  geom_col(aes(fill = Dataset),width = 0.5, position = position_dodge(width = 0.5)) +scale_fill_brewer(palette="Paired") + ylab("Match with sewage (%)") #+ theme_minimal()
+
+plot.sew.match
+
+# Plot black and white
+plot.sew.match.bw <- plot.sew.match+scale_fill_grey()+theme(axis.text.x=element_text(angle=90, vjust=0.5),plot.title = element_text(hjust = 0.5))#+ scale# +theme_bw()# 
+plot.sew.match.bw
+
+# Save image 
+ggsave("percentageMatch_L_BW.png", plot = plot.sew.match.bw, width = 40, height = 20, units = "cm",dpi=2000)
+ggsave("percentageMatch_xS_BW.png", plot = plot.sew.match.bw, width = 30, height = 20, units = "cm",dpi=320)
+```
