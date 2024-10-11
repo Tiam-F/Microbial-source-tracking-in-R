@@ -1,0 +1,430 @@
+---
+title: "diversity check"
+output: html_document
+date: '2023-04-11'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(cowplot)
+
+
+# Retrieve Illumina phyloseq object for comparison of alpha and  beta diversity
+beta.ps <- ps
+
+# Retrieve Nanopore  phyloseq object for comparison of alpha and  beta diversity
+ps_nano <- ps_ts100d
+
+# Remove unwanted samples
+ps_ill <- subset_samples(ps_ill, Location != "30")
+ps_ill <- subset_samples(ps_ill, Location != "3O")
+ps.mixed <- subset_samples(ps.mixed, Location != "3O")
+ps.mixed <- subset_samples(ps.mixed, Location != "30")
+
+# Agglomerate taxa and rarefy
+ps.rare_glom<-tax_glom(ps.mixed , taxrank="Species")
+ps.rared.nano = rarefy_even_depth(ps.rare_glom, rngseed=1, sample.size=0.8*min(sample_sums(ps.mixed)), replace=F)
+
+# Visual representation of the diversity inside the samples (i.e., α diversity)
+alph.nano <- plot_richness(physeq = ps.rared.nano, 
+              x= "Location",measures = c("Shannon"))+ geom_boxplot() +   theme(plot.title = element_text(hjust = 0.5, vjust=1))+ #axis.title.x=element_blank()
+  geom_hline(yintercept=4) +facet_grid(~Dataset,scales="free_x")
+alph.nano 
+
+# Permanova significance test
+pseq.rel <- microbiome::transform(ps.rared.nano, "compositional")
+pseq.otu <- abundances(pseq.rel)
+pseq.meta <- meta(pseq.rel)
+library(vegan)
+pseq.permanova <- adonis(t(pseq.otu) ~ Dataset,
+               data = pseq.meta, permutations=999, method = "bray")
+print(as.data.frame(pseq.permanova$aov.tab)["Dataset", "Pr(>F)"])
+
+
+# Alpha diversity of Illumina and Nanopore (not rarefied)
+alph.nano.glom <- plot_richness(physeq = ps.mixed, 
+              x= "Location",measures = c("Shannon"))+ geom_boxplot()+   theme(axis.title.x=element_blank(),plot.title = element_text(hjust = 0.5, vjust=1))+ 
+  geom_hline(yintercept=4)+facet_grid(~Dataset,scales="free_x")
+
+alph.nano.glom
+
+# Plot both rarified and non-rarified Alpha diversity
+plot_alpha1 <- plot_grid(alph.nano.glom, alph.nano,ncol=1,labels = c('A','B'),label_size = 10,vjust = 2, label_x=0.03 )
+plot_alpha1 
+
+
+ggsave("alpha_div_rarefaction_toFix.png", plot = plot_alpha1, width = 30, height = 20, units = "cm",dpi=2000)
+
+```
+
+
+```{r setup, include=FALSE}
+
+#beta diversity for Nanopore
+# Remove unwanted samples
+ps_nano <- subset_samples(ps_nano, Env != "30")
+ps_nano <- subset_samples(ps_nano, Env != "3O")
+otu.b.nano <-t(as(otu_table(ps_nano),"matrix"))
+
+# Transform sample counts
+nano.b.prop <- transform_sample_counts(ps_nano, function(otu.b.nano) otu.b.nano/sum(otu.b.nano))
+ord.bray.nano <- ordinate(nano.b.prop, method="NMDS", distance="bray")
+
+# Plot ordination
+bray.nano <- plot_ordination(nano.b.prop, ord.bray.nano, color="Env", title="Nanopore Bray NMDS",shape="dataset") +  theme_bw() 
+bray.nano <- bray.nano +
+  guides(color=guide_legend("Location")) #+ guides(fill=guide_legend(Env="test")) #labs(fill="xyz")
+bray.nano
+
+
+#---------------------------------------------------------------------------
+#beta diversity for Illumina
+otu.b.ill <-t(as(otu_table(ps_ill),"matrix"))
+
+# Transform sample counts
+ill.b.prop <- transform_sample_counts(ps_ill, function(otu.b.ill) otu.b.ill/sum(otu.b.ill))
+ord.bray.ill <- ordinate(ill.b.prop, method="NMDS", distance="bray")
+
+# Plot ordination
+illu.bray <- plot_ordination(ill.b.prop, ord.bray.ill, color="Location", title="Illumina Bray NMDS") +  theme_bw()  #,shape="dataset")
+illu.bray
+
+# Plot both Illumina and Nanopore in same plot
+ill.nano.bray <- plot_grid(bray.nano, illu.bray,labels = c('A','B'))
+ill.nano.bray
+
+## Using combined phyloseq object to plot in same image
+otu.b.both <-t(as(otu_table(ps.mixed),"matrix"))
+both.b.prop <- transform_sample_counts(ps.mixed, function(otu.b.both) otu.b.both/sum(otu.b.both))
+ord.bray.both <- ordinate(both.b.prop, method="NMDS", distance="bray")
+
+both.bray <- plot_ordination(both.b.prop, ord.bray.both, color="Location", title="Bray PCoA",shape="Dataset") +  theme_bw()  #,shape="dataset")
+both.bray
+
+# beta diversity for nano and illumina after rarefaction 
+### Illumina
+# Rarefy and remove unwanted samples
+ps_ill.rare = rarefy_even_depth(ps_ill, rngseed=1, sample.size=0.8*min(sample_sums(ps.mixed)), replace=F)
+ps_ill.rare <- subset_samples(ps_ill.rare, Location != "3O")
+ps_ill.rare <- subset_samples(ps_ill.rare, Location != "30")
+otu.b.ill.rare <-t(as(otu_table(ps_ill.rare),"matrix"))
+
+rare.ill.prop <- transform_sample_counts(ps_ill.rare, function(otu.b.ill.rare) otu.b.ill.rare/sum(otu.b.ill.rare))
+ord.bray.rare <- ordinate(rare.ill.prop , method="NMDS", distance="bray")
+
+rare.ill.bray <- plot_ordination(rare.ill.prop, ord.bray.rare, color="Location", title="Illumina Bray NMDS rarified") +  theme_bw()  #,shape="dataset")
+rare.ill.bray
+
+# both illumina and rarefied Illumina
+bray.nano.rare <- plot_ordination(nano.b.prop, ord.bray.nano, color="Env", title="Nanopore Bray NMDS rarified",shape="dataset") +  theme_bw()  
+
+bray.nano.rare <- bray.nano.rare +
+  guides(color=guide_legend("Location")) #+ guides(fill=guide_legend(Env="test")) #labs(fill="xyz")
+bray.nano.rare
+
+ill.both.bray <- plot_grid(bray.nano.rare, rare.ill.bray,labels = c('C','D'))
+ill.both.bray
+
+
+#####################################################
+# combine rarefied and non-rarefied nanopore and Illumina
+
+
+combined.bray.rare <- plot_grid(ill.nano.bray,ill.both.bray, ncol=1)
+combined.bray.rare 
+
+ggsave("beta_div_with_and_wo_rarefaction.png", plot = combined.bray.rare , width = 30, height = 20, units = "cm",dpi=2000)
+
+```
+
+
+```{r add nanopore and illumina}
+
+# Merging Illumina and Nanopore phyloseq object 
+
+# Remove unnecessary characters in .Data (matrix)
+ps_nano@tax_table@.Data <- substring(ps_nano@tax_table@.Data, 4)
+colnames(ps_nano@tax_table@.Data)<- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species")
+
+# Receive taxtable from Illumina and Nanopore
+tax.nano = tax_table(ps_nano)
+tax.ill = tax_table(ps_ill)
+
+# Receive otu-table from Illumina and Nanopore
+otu.nano = otu_table(ps_nano)
+otu.ill = otu_table(ps_ill)
+
+
+# Receive sample-data from Illumina and Nanopore
+sam.nano = sample_data(ps_nano)
+sam.ill = sample_data(ps_ill)
+
+sam.ill[2:8] <- NULL
+sam.ill$SampleType <- NULL
+sam.ill <- sam.ill[, c("SampleID","Location")]
+sam.ill$Dataset <- rep("Illumina",length(sam.ill$SampleID))
+
+sam.nano$SourceSink <- NULL
+sam.nano$Location <- NULL
+colnames(sam.nano) <- c("SampleID","Location")
+sam.nano$Dataset <- rep("Nanopore",length(sam.nano$SampleID))
+
+# Merge tax-table and otu-table
+tax.merge.mix =merge_phyloseq(tax.nano, tax.ill)
+otu.merge.mix = merge_phyloseq(otu.nano,otu.ill)
+
+# Merge sample data
+sam.merge.mix <- rbind(sam.nano,sam.ill)
+
+# Merge to phyloseq object 
+
+ps.mixed <- phyloseq(otu.merge.mix, 
+               sample_data(sam.merge.mix), 
+               tax.merge.mix)
+
+
+# Plot beta diversity
+
+#beta diversity for Illumina
+otu.b.mixed <-t(as(otu_table(ps.mixed),"matrix"))
+
+mix.b.prop <- transform_sample_counts(ps.mixed, function(otu.b.mixed) otu.b.mixed/sum(otu.b.mixed))
+ord.bray.mix <- ordinate(mix.b.prop , method="PCoA", distance="bray")
+
+plot_ordination(mix.b.prop, ord.bray.mix, color="Location", title="Bray PCoA",shape="Dataset") +  theme_bw()  #
+
+
+## Rarefaction curve
+sam.to.keep.rare <- c("3M_2021-07-09","3R_2021-07-09", "27_2021-06-30", "3M_210709", "3R_210709", "27_210630")
+ps.mixed2 <- prune_samples( sam.to.keep.rare ,ps.mixed)
+
+# Change to correct taxonomy 
+colnames(ps.mixed1@tax_table@.Data)<- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species")
+species_glom<-tax_glom(ps.mixed1 , taxrank="Species")
+species.nano_glom<-tax_glom(ps_nano , taxrank="Species")
+
+# Rarefy
+ps.mix.rare = rarefy_even_depth(species_glom, rngseed=1, sample.size=0.8*min(sample_sums(species_glom)), replace=F) #1*min(sample_sums(species_glom))
+
+# Make data frame with selected samples
+otu.mix.rare <- otu_table(ps.mix.rare )
+otu.mix.rare.sub <- t(as.data.frame(otu.mix.rare))
+rownames.rare <- c("27_Nanopore","3M_Nanopore","3R_Nanopore","27_Illumina","3M_Illumina","3R_Illumina")
+rownames(otu.mix.rare.sub) <- rownames.rare
+
+
+S.mix <- specnumber(otu.mix.rare.sub )
+raremax.mix <- min(rowSums(otu.mix.rare.sub ))
+Srare.mix <- rarefy(otu.mix.rare.sub,raremax.mix)
+plot(S.mix, Srare.mix, xlab = "Observed No. of Species", ylab = "Rarefied No. of Species")
+#Rarefaction of the samples
+
+# Color lines based on Illumina or Nanopore 
+color.rare <- c("blue","blue","blue","green","green","green")
+rare.final <- rarecurve(otu.mix.rare.sub , step =50, sample = raremax.mix, col = color.rare, cex = 0.6, )
+ggsave("rarefaction.png", plot = rare.final, width = 30, height = 20, units = "cm",dpi=2000)
+
+# Keep only number from the sample name for further adding to line in plot 
+rare.to.gg <- rarecurve(otu.mix.rare.sub , step =50, sample = raremax.mix, cex = 0.6,tidy=TRUE )
+rare.to.gg$Site1 <- gsub("_.*", "\\1", rare.to.gg$Site)
+rare.to.gg$Dataset <- gsub(".*_", "\\1", rare.to.gg$Site)
+rare.to.gg$Site2 <- ifelse(rare.to.gg$Dataset=="Nanopore",gsub("_.*", "\\1 ", rare.to.gg$Site),gsub("_.*", "\\1", rare.to.gg$Site))
+
+install.packages("ggrepel")                     # Install ggrepel package
+library("ggrepel") 
+library(directlabels)
+
+colnames(rare.to.gg$Site1)
+
+# Plot rarefaction curve on selected samples 
+rare.curve.plot <- ggplot(rare.to.gg, aes(x=Sample,y=Species, group = Site,color=Dataset)) +geom_line()+
+  geom_dl(aes(label = Site2), method = list( "last.points"), cex = 0.8)+ ylab("Species richness")+ xlab("Number of sequences per sample")+ ggtitle("Rarefaction curve")+
+  theme(plot.title = element_text(hjust = 0.5))
+#+geom_line(aes(color=Dataset))  +geom_point(aes(shape=Site1), size=2) #geom_text(aes(label=Site))+geom_label_repel(aes(label = 1577),nudge_x = 1,na.rm = TRUE)
+rare.curve.plot
+ggsave("rarecurve_plot.pdf", plot = rare.curve.plot, width = 30, height = 20, units = "cm",dpi=2000)
+
+# Same rarefaction curve but in black and white with symbols/line type instead of color 
+linetypes = c(apply(expand.grid(c(2,4), c(1,2,4,8,"A")), 1, paste, collapse=""), 
+              apply(expand.grid(c(2,4,8), c(2,4), c(5,"F"), 2), 1, paste, collapse=""),
+              "4284B4F4", "228F61A4") 
+rare.curve.plot.bw <- ggplot(rare.to.gg, aes(x=Sample,y=Species, group = Site)) +geom_line(aes(linetype = Dataset))+ #+scale_linetype_manual(values=linetypes)+
+   ylab("Species richness")+ xlab("Number of sequences per sample")+ ggtitle("Rarefaction curve")+ geom_dl(aes(label = Site2), method = list( "last.points"), cex = 0.8)+
+  theme(plot.title = element_text(hjust = 0.5)) #geom_dl(aes(label = Site2), method = list( "last.points"), cex = 0.8)+
+#+geom_line(aes(color=Dataset))  +geom_point(aes(shape=Site1), size=2) #geom_text(aes(label=Site))+geom_label_repel(aes(label = 1577),nudge_x = 1,na.rm = TRUE)
+rare.curve.plot.bw
+ggsave("rarefaction_BW_4maj_species.png", plot = rare.curve.plot.bw, width = 30, height = 20, units = "cm",dpi=2000)
+
+```
+
+## Including Plots
+
+```{r abundance plot}
+
+# Class level abundance 
+
+gp.first <- prune_taxa(names(sort(taxa_sums(ps.mixed),decreasing = T)), ps.mixed)
+gp.mix <- tax_glom(gp.first, taxrank ="Class",NArm=F)
+top.class.list <- names(sort(taxa_sums(gp.mix),TRUE)[1:10])
+top.class <- prune_taxa(top.class.list,gp.mix)
+proportional_top <- merge_taxa(top.class,"Class")
+gp_prop <- transform_sample_counts(proportional_top,function(x) 100 * x/sum(x))
+df.mix.top20.gp <- psmelt(gp_prop)
+
+# keep only certain samples
+df.mix.top20.filt.gp <- filter(df.mix.top20.gp,grepl(paste(text_grep,collapse='|'),Location))
+
+# Plot relative abundance at class level
+versus.plot.mix.gp <- ggplot(df.mix.top20.filt.gp, aes(x=Sample, y=Abundance, fill=Class ))+
+  geom_bar(aes(), stat="identity", position="fill") + 
+    scale_fill_manual(values = ill.nano.color)+ theme(axis.text.x=element_blank(),plot.title = element_text(hjust = 0.9))+
+  facet_nested(~ Dataset+Location, scales="free_x") #+ ggtitle("Water samples sequenced with Illumina and Nanopore")
+
+versus.plot.mix.gp
+
+# Relative abundance at Genus level
+gp.mix.genus <- tax_glom(gp.first, taxrank ="Genus",NArm=F)
+top.genus.list <- names(sort(taxa_sums(gp.mix.genus),TRUE)[1:40])
+top.genus <- prune_taxa(top.genus.list,gp.mix.genus)
+proportional_top.genus <- merge_taxa(top.genus,"Genus")
+gp_prop.genus <- transform_sample_counts(proportional_top.genus,function(x) 100 * x/sum(x))
+df.genus.top20.gp <- psmelt(gp_prop.genus)
+
+# Keep wanted samples and remove empty rows
+df.genus.top20.filt.gp <- filter(df.genus.top20.gp,grepl(paste(text_grep,collapse='|'),Location))
+df.genus.top.filt.gp <-  df.genus.top20.filt.gp[-which(is.na(df.genus.top20.filt.gp$Genus)), ]
+df.genus.top.filt.gp <-  df.genus.top.filt.gp[-which(df.genus.top.filt.gp$Abundance == "NaN"), ]
+
+# Plot relative abundance at genus level
+versus.plot.mix.gp.genus <- ggplot(df.genus.top.filt.gp, aes(x=Sample, y=Abundance, fill=Genus ))+
+  geom_bar(aes(), stat="identity", position=position_fill(reverse=TRUE))+  theme(axis.text.x=element_blank(),plot.title = element_text(hjust = 0.9))+
+  facet_nested(~ Dataset+Location, scales="free_x") #+ ggtitle("Water samples sequenced with Illumina and Nanopore")
+
+versus.plot.mix.gp.genus
+
+```
+
+
+```{r abundance plot}
+
+# Process Nanopore and Illumina separately
+ps_nano
+ps_ill
+
+# Nanopore data
+# Prune taxa, agglomerate taxa, then sort based on sum of taxa 
+gp.first.nano <- prune_taxa(names(sort(taxa_sums(ps_nano),decreasing = T)), ps_nano)
+gp.genus <- tax_glom(gp.first.nano, taxrank ="Genus",NArm=F)
+top.gen.list <- names(sort(taxa_sums(gp.genus),TRUE)[1:10])
+top.genus.nano <- prune_taxa(top.gen.list,gp.genus)
+proportional_top.nano <- merge_taxa(top.genus.nano,"Genus")
+gp_prop.nano <- transform_sample_counts(proportional_top.nano,function(x) 100 * x/sum(x))
+df.gen.top20.gp <- psmelt(gp_prop.nano)
+
+# Keep only wanted samples
+df.gen.top20.filt.gp <- filter(df.gen.top20.gp,grepl(paste(text_grep,collapse='|'),Env))
+
+# Remove unwanted columns 
+df.gen.top20.filt.gp$SourceSink <- NULL
+df.gen.top20.filt.gp$Location <- NULL
+df.gen.top20.filt.gp$SampleID <- NULL
+colnames(df.gen.top20.filt.gp)[4] <- c("Location")
+
+# Add dataset column 
+df.gen.top20.filt.gp$Dataset <- rep("Nanopore",length(df.gen.top20.filt.gp$Sample))
+
+# Plot the relative abundance at species level
+versus.plot.gen.gp <- ggplot(df.gen.top20.filt.gp, aes(x=Sample, y=Abundance, fill=Genus ))+
+  geom_bar(aes(), stat="identity", position="fill") +  theme(axis.text.x=element_blank(),plot.title = element_text(hjust = 0.9)) #+
+  #facet_nested(~ Location, scales="free_x") #+ ggtitle("Water samples sequenced with Illumina and Nanopore")
+
+versus.plot.gen.gp
+
+# Illumina data
+# Prune taxa, agglomerate taxa, then sort based on sum of taxa 
+gp.first.ill <- prune_taxa(names(sort(taxa_sums(ps_ill),decreasing = T)), ps_ill)
+gp.ill <- tax_glom(gp.first.ill, taxrank ="Genus",NArm=F)
+top.gen.list.il <- names(sort(taxa_sums(gp.ill),TRUE)[1:11])
+top.genus.ill <- prune_taxa(top.gen.list.il,gp.ill)
+proportional_top.ill <- merge_taxa(top.genus.ill,"Genus")
+gp_prop.ill <- transform_sample_counts(proportional_top.ill,function(x) 100 * x/sum(x))
+df.gen.top20.gp.il <- psmelt(gp_prop.ill)
+
+# Keep only wanted samples
+df.gen.top20.filt.gp.il <- filter(df.gen.top20.gp.il,grepl(paste(text_grep,collapse='|'),Location))
+df.gen.top20.filt.gp.il <-  df.gen.top20.filt.gp.il[-which(is.na(df.gen.top20.filt.gp.il$Genus)), ]
+
+# Remove unwanted columns 
+df.gen.top20.filt.gp.il[5:11] <- NULL
+df.gen.top20.filt.gp.il$SampleType <- NULL
+df.gen.top20.filt.gp.il$SampleID <- NULL
+df.gen.top20.filt.gp.il$Dataset <- rep("Illumina",length(df.gen.top20.filt.gp.il$Sample))
+
+
+#put all data frames into list
+df_list.mixed <- list(df.gen.top20.filt.gp.il, df.gen.top20.filt.gp)
+
+#merge all data frames in list
+df.mix.nano.ill <- Reduce(function(x, y) merge(x, y, all=TRUE), df_list.mixed )
+
+ill.nano.color <-  c(brewer.pal(11,name="Set3"),brewer.pal(8,name="Set2"),brewer.pal(9,"Set1"))
+versus.plot.df.mix <- ggplot(df.mix.nano.ill, aes(x=Sample, y=Abundance, fill=Genus ))+
+  geom_bar(aes(), stat="identity", position="fill") + 
+    scale_fill_manual(values = ill.nano.color)+ theme(axis.text.x=element_blank(),plot.title = element_text(hjust = 0.9))+
+  facet_nested(~ Dataset+Location, scales="free_x")+guides(fill=guide_legend(ncol=1)) 
+versus.plot.df.mix
+
+# ADD Class and Genus plot into one plot
+versus.plot.mix.gp #Class
+versus.plot.df.mix #Genus
+
+plot.combined <- plot_grid(versus.plot.mix.gp,versus.plot.df.mix,labels = c('A','B'),label_size = 14,vjust = 2, label_x=0.03, ncol=1) +
+  ggtitle("Default in 2.2.0 is left-aligned")
+plot.combined
+
+ggsave("ill_vs_nano_abund_GenusS.png", plot = versus.plot.df.mix, width = 30, height = 20, units = "cm",dpi=2000)
+ggsave("ill_vs_nano_abund_classS.png", plot = versus.plot.mix.gp, width = 30, height = 20, units = "cm",dpi=2000)
+
+ggsave("ill_vs_nano_abund_classGenusS_textedit_ncol1_square_test1.png", plot = plot.combined, width = 30, height = 20, units = "cm",dpi=320)
+ggsave("ill_vs_nano_abund_classGenusL_textedit.png", plot = plot.combined, width = 40, height = 20, units = "cm",dpi=2000)
+```
+
+
+
+```{r only 3 samples nanopore vs illumina}
+
+
+#########
+# only three samples nanopore vs illumina for presentation purpose 
+df.mix.nano.ill.3 <- df.mix.nano.ill
+keep1 <- c("3M","3R","T1")
+
+# Keep only the three samples
+df.mix.nano.ill.3 <- df.mix.nano.ill.3[df.mix.nano.ill.3$Location %in% keep1, ]
+
+# Plot at Genus level
+dill.nano.color <-  c(brewer.pal(11,name="Set3"),brewer.pal(8,name="Set2"),brewer.pal(9,"Set1"))
+versus.plot.df.mix.3 <- ggplot(df.mix.nano.ill.3, aes(x=Sample, y=Abundance, fill=Genus ))+
+  geom_bar(aes(), stat="identity", position="fill") + 
+    scale_fill_manual(values = ill.nano.color)+ theme(axis.text.x=element_blank(),plot.title = element_text(hjust = 0.9))+
+    facet_nested(~ Dataset+Location, scales="free_x")+guides(fill=guide_legend(ncol=1)) #,label.vjust=1.5))
+versus.plot.df.mix.3
+
+# Keep only three samples, at Class level
+df.mix.top20.filt.gp.3 <- df.mix.top20.filt.gp
+df.mix.top20.filt.gp.3 <- df.mix.top20.filt.gp.3[df.mix.top20.filt.gp.3$Location %in% keep1, ]
+
+# Plot at Class level
+versus.plot.mix.gp.3 <- ggplot(df.mix.top20.filt.gp.3, aes(x=Sample, y=Abundance, fill=Class ))+
+  geom_bar(aes(), stat="identity", position="fill") + 
+    scale_fill_manual(values = ill.nano.color)+ theme(axis.text.x=element_blank(),plot.title = element_text(hjust = 0.9))+
+  facet_nested(~ Dataset+Location, scales="free_x") 
+versus.plot.mix.gp.3
+
+# Combine Genus and Class level relative abundance plot
+plot.3.genus.class <- plot_grid(versus.plot.mix.gp.3,versus.plot.df.mix.3,labels = c('A','B'),label_size = 14,vjust = 2, label_x=0.03 ) 
+plot.3.genus.class
+
+# Save the image 
+ggsave("ill_vs_nano_3samplesS.png", plot = plot.3.genus.class, width = 30, height = 20, units = "cm",dpi=2000)
+```
