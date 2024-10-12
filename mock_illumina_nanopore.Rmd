@@ -80,9 +80,6 @@ versus.plot.mock
 ```
 
 
-
-
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
@@ -251,15 +248,12 @@ versus.plot.mock.spe <- ggplot(merg.mock.species, aes(x=Sample, y=Abundance, fil
   facet_nested(~ Dataset, scales="free_x") #+ ggtitle("Water samples with Illumina and Nanopore"),legend.text=element_text(size=8)
 versus.plot.mock.spe
 
-
-
-
-
 ```
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
+################################################
 # Dada2 pipeline for Illumina data 
 
 path.mock <- "//16S_mock/bb/R/" # the directory containing the fastq files.
@@ -400,8 +394,6 @@ df.mock.test.new <- psmelt(ps.mock.test.new )
 
 
 ```
-
-
 
 
 ```{r setup, include=FALSE}
