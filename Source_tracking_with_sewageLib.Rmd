@@ -10,7 +10,6 @@ knitr::opts_chunk$set(echo = TRUE)
 #(Cleaned version of st.rmd)
 
 # Import sewage lib biom file 
-
 lib.sew1 <- import_biom("/mnt/scratch/users/tiafit/projects/sourcetracking_with_library/sew_sample_fixed.biom")
 
 # Remove redundant name of the samples
@@ -41,7 +40,6 @@ Loc.name.lib <- as.factor(sapply(strsplit(row.sam.lib, "_"), `[`, 1))
 
 df.lib <- data.frame(SampleID=row.sam.lib,SourceSink=rep("sink",length(row.sam.lib)),location=Loc.name.lib)
 
-# Add source or sink depending on if dilution exists
 # Add the locations real name
 sew.names.loc <- sew.names$Sample.Name
 sew.names.loc <- paste(unique(sew.names.loc), collapse = ' ')
@@ -176,8 +174,6 @@ write.table(sew.names,file= "~/projects/sourcetracking_with_library/sew_names_fi
 ```
 
 ## Including Plots
-
-You can also embed plots, for example:
 
 ```{r }
 # MAKE density plot of the sewage match for both illumina and nanopore
