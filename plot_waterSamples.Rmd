@@ -263,8 +263,6 @@ relative_plot50
 
 ```
 
-## Including Plots
-
 ```{r spikes without mock}
 
 # Spiked samples without the mock
@@ -369,7 +367,7 @@ all_result_emu100 <- rbindlist(all_lists_emu100, fill = T)
 # change column name
 names(all_result_emu100)[14] <- "Id"
 
-# kortar ner namnet, 10 står för antal tecken som ska vara kvar. 
+# Shortening the name
 all_result_emu100$Id<- strtrim(all_result_emu100$Id,11)
 
 # Remove empty rows
