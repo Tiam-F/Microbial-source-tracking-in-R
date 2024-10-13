@@ -426,5 +426,5 @@ plot.3.genus.class <- plot_grid(versus.plot.mix.gp.3,versus.plot.df.mix.3,labels
 plot.3.genus.class
 
 # Save the image 
-ggsave("ill_vs_nano_3samplesS.png", plot = plot.3.genus.class, width = 30, height = 20, units = "cm",dpi=2000)
+ggsave("ill_vs_nano_3samples.png", plot = plot.3.genus.class, width = 30, height = 20, units = "cm",dpi=2000)
 ```
