@@ -173,7 +173,6 @@ write.table(sew.names,file= "~/projects/sourcetracking_with_library/sew_names_fi
 
 ```
 
-## Including Plots
 
 ```{r }
 # MAKE density plot of the sewage match for both illumina and nanopore

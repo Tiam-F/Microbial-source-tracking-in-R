@@ -79,7 +79,7 @@ st <- data.frame(SampleID = samples_to_biom, SourceSink=rep("sink",length(sample
 rownames(st) <- samples_to_biom
 st$SourceSink <- ifelse(st$Env =="MOCK", "source", "sink")
 
-# Add location (Env1) based on sampleID. . Location removed due to classified data, change X to the location where you took the sample
+# Add location (Env1) based on sampleID. Location removed due to classified data, change X to the location where you took the sample
 st <- st %>%
   mutate(Env1 = case_when(
     startsWith(SampleID, "3R") ~ "X"
@@ -145,3 +145,4 @@ st_ss$ss_3 <- ifelse(st_ss$Env %in% "3", "sink", "source")
 st_ss$ss_3R <- ifelse(st_ss$Env %in% "3R", "sink", "source")
 write.table(st_ss, "/mnt/scratch/users/projects/sourcetracking/direct_to_biom/sampledata_complete1_all_ss_added.txt",quote=FALSE,sep="\t",row.names = FALSE)
 
+```

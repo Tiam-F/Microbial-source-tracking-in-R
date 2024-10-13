@@ -7,7 +7,7 @@ date: '2023-04-11'
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(cowplot)
-
+library(vegan)
 
 # Retrieve Illumina phyloseq object for comparison of alpha and  beta diversity
 beta.ps <- ps
@@ -35,7 +35,7 @@ alph.nano
 pseq.rel <- microbiome::transform(ps.rared.nano, "compositional")
 pseq.otu <- abundances(pseq.rel)
 pseq.meta <- meta(pseq.rel)
-library(vegan)
+
 pseq.permanova <- adonis(t(pseq.otu) ~ Dataset,
                data = pseq.meta, permutations=999, method = "bray")
 print(as.data.frame(pseq.permanova$aov.tab)["Dataset", "Pr(>F)"])
@@ -66,7 +66,7 @@ ps_nano <- subset_samples(ps_nano, Env != "30")
 ps_nano <- subset_samples(ps_nano, Env != "3O")
 otu.b.nano <-t(as(otu_table(ps_nano),"matrix"))
 
-# Transform sample counts
+# Transform sample count
 nano.b.prop <- transform_sample_counts(ps_nano, function(otu.b.nano) otu.b.nano/sum(otu.b.nano))
 ord.bray.nano <- ordinate(nano.b.prop, method="NMDS", distance="bray")
 
@@ -81,7 +81,7 @@ bray.nano
 #beta diversity for Illumina
 otu.b.ill <-t(as(otu_table(ps_ill),"matrix"))
 
-# Transform sample counts
+# Transform sample count
 ill.b.prop <- transform_sample_counts(ps_ill, function(otu.b.ill) otu.b.ill/sum(otu.b.ill))
 ord.bray.ill <- ordinate(ill.b.prop, method="NMDS", distance="bray")
 
@@ -89,11 +89,11 @@ ord.bray.ill <- ordinate(ill.b.prop, method="NMDS", distance="bray")
 illu.bray <- plot_ordination(ill.b.prop, ord.bray.ill, color="Location", title="Illumina Bray NMDS") +  theme_bw()  #,shape="dataset")
 illu.bray
 
-# Plot both Illumina and Nanopore in same plot
+# Plot both Illumina and Nanopore in the same plot
 ill.nano.bray <- plot_grid(bray.nano, illu.bray,labels = c('A','B'))
 ill.nano.bray
 
-## Using combined phyloseq object to plot in same image
+## Using combined phyloseq object to plot in the same image
 otu.b.both <-t(as(otu_table(ps.mixed),"matrix"))
 both.b.prop <- transform_sample_counts(ps.mixed, function(otu.b.both) otu.b.both/sum(otu.b.both))
 ord.bray.both <- ordinate(both.b.prop, method="NMDS", distance="bray")
@@ -127,7 +127,7 @@ ill.both.bray
 
 
 #####################################################
-# combine rarefied and non-rarefied nanopore and Illumina
+# combine rarefied and non-rarefied Nanopore and Illumina
 
 
 combined.bray.rare <- plot_grid(ill.nano.bray,ill.both.bray, ncol=1)
@@ -257,7 +257,6 @@ ggsave("rarefaction_BW_4maj_species.png", plot = rare.curve.plot.bw, width = 30,
 
 ```
 
-## Including Plots
 
 ```{r abundance plot}
 
@@ -374,7 +373,7 @@ versus.plot.df.mix <- ggplot(df.mix.nano.ill, aes(x=Sample, y=Abundance, fill=Ge
   facet_nested(~ Dataset+Location, scales="free_x")+guides(fill=guide_legend(ncol=1)) 
 versus.plot.df.mix
 
-# ADD Class and Genus plot into one plot
+# Add Class and Genus plot into one plot
 versus.plot.mix.gp #Class
 versus.plot.df.mix #Genus
 
@@ -399,7 +398,7 @@ ggsave("ill_vs_nano_abund_classGenusL_textedit.png", plot = plot.combined, width
 df.mix.nano.ill.3 <- df.mix.nano.ill
 keep1 <- c("3M","3R","T1")
 
-# Keep only the three samples
+# Keep only the three selected samples
 df.mix.nano.ill.3 <- df.mix.nano.ill.3[df.mix.nano.ill.3$Location %in% keep1, ]
 
 # Plot at Genus level

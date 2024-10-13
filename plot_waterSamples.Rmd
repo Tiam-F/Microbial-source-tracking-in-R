@@ -537,7 +537,7 @@ df_top20 <- df_top20 %>%
     startsWith(Sample, "3R") ~ "X"
   ))
 
-# Add another column with full name (Genus and Specie)
+# Add another column with full name (Genus and Species)
 df_top20$name <- paste(df_top20$Genus,df_top20$Species,sep=" ")
 
 # Grep only certain samples
@@ -559,7 +559,7 @@ relative_df.100sam
 
 ```{r setup, include=FALSE}
 ######################################################################################################################################
-# Plot  for 100 samples with other parameter settings of the data
+# Plot for 100 samples with other parameter settings of the data
 
 # Get top 20 taxa 
 top20_10samplesD <- names(sort(taxa_sums(s100d), decreasing=TRUE))[1:30]
@@ -585,7 +585,7 @@ df_top20D <- df_top20D %>%
     startsWith(Sample, "3R") ~ "X"
   ))
 
-# Add another column with full name (Genus and Specie)
+# Add another column with full name (Genus and Species)
 df_top20D$Species <- paste(df_top20D$genus,df_top20D$species,sep=" ")
 
 # Samples to keep
@@ -694,5 +694,4 @@ plot_bar(plotbar.ill, fill="Rank1")
 
 
 
-```
 ```

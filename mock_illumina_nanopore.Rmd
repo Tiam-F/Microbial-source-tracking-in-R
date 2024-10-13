@@ -237,7 +237,7 @@ merg.mock.species$Genus <-ifelse(merg.mock.species$Genus == "Escherichia-Shigell
 # Add genus and species name
 merg.mock.species$Species <- paste(merg.mock.species$Genus,merg.mock.species$Species,sep=" ")
 
-# Change to correct (1 a too much in the name)
+# Change to correct (one "a" too much in the name)
 merg.mock.species$Species <- ifelse(merg.mock.species$Species=="Akkermansiaa muciniphila", "Akkermansia muciniphila",merg.mock.species$Species)
 
 # Plot  at species-level 
