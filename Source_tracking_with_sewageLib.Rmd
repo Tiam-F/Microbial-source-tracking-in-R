@@ -9,7 +9,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 #(Cleaned version of st.rmd)
 
-# Import sewage lib biom file 
+# Import the BIOM file for the sewage library, converted from Kraken2 using, for example, kraken-biom
 lib.sew1 <- import_biom("/mnt/scratch/users/tiafit/projects/sourcetracking_with_library/sew_sample_fixed.biom")
 
 # Remove redundant name of the samples
