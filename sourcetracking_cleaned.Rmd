@@ -17,7 +17,7 @@ install.packages(
 library(phyloseq)
 library(dplyr)
 
-# Import the biom-files. 
+# Import the BIOM files for the mock, water, and spiked samples, converted from Kraken2 using, for example, kraken-biom
 mock_samples <- import_biom("/mnt/scratch/users/projects/sourcetracking/from_kraken/mock_samples.biom")
 samples_50 <- import_biom("~/projects/sourcetracking/50_samples.biom")
 spiked <- import_biom("/mnt/scratch/users/projects/sourcetracking/from_kraken/1_10ng_realname.biom")
