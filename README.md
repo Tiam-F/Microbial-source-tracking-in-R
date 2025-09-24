@@ -3,7 +3,7 @@ Microbial fecal source tracking in R
 
 Files used for microbial fecal source tracking in R. The files are used to process Illumina (short reads) and Nanopore (long reads) data. The data are combined with microbial fecal libraries, which give output files for source tracking (Sourcetracker2). The data can also be visualized using relative abundance. Not all chunks in the code are needed, just use the relevant ones for your requirements.
 
---- The files aren't completely clean, I'll work on them when I have time ---
+---- The files aren't completely clean, I'll work on them when I have time ----
 
 * Source_tracking_with_sewageLib.Rmd  
 Contains a method for extracting and processing water samples with a fecal library. Writes a BIOM file and a metadata file as output to be used in source tracking (Sourcetracker2 in Linux).
